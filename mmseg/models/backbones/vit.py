@@ -5,6 +5,8 @@ import math
 from itertools import repeat
 from torch._six import container_abcs
 import warnings
+import numpy as np
+import torchvision
 
 from .helpers import load_pretrained
 # from .layers import DropPath, to_2tuple, trunc_normal_
@@ -285,7 +287,7 @@ class VisionTransformer(nn.Module):
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
                  drop_path_rate=0., hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
-                 pos_embed_interp=False, random_init=False, align_corners=False, **kwargs):
+                 pos_embed_interp=False, high_freq_pos_embed=False, random_init=False, align_corners=False, **kwargs):
         super(VisionTransformer, self).__init__(**kwargs)
         self.model_name = model_name
         self.img_size = img_size
@@ -310,6 +312,10 @@ class VisionTransformer(nn.Module):
 
         self.num_stages = self.depth
         self.out_indices = tuple(range(self.num_stages))
+
+        self.high_freq_pos_embed = high_freq_pos_embed
+        if high_freq_pos_embed:
+            self.gaussian_filter = self.get_gaussian_filter().cuda()
 
         if self.hybrid_backbone is not None:
             self.patch_embed = HybridEmbed(
@@ -369,6 +375,30 @@ class VisionTransformer(nn.Module):
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
 
+    def get_gaussian_filter(self, K_size=3, sigma=1.3):
+        pad = K_size // 2
+        K = torch.zeros(K_size, K_size).float()
+        for x in range(-pad, -pad + K_size):
+            for y in range(-pad, -pad + K_size):
+                K[y + pad, x + pad] = np.exp(-(x ** 2 + y ** 2) / (2 * (sigma ** 2)))
+        K /= (2 * np.pi * sigma * sigma)
+        K /= K.sum()
+        return K
+
+    def laplace_pyramid(self, x):
+        gray_image = torchvision.transforms.Grayscale()(x)
+        gau_filter = self.gaussian_filter.unsqueeze(0).unsqueeze(0)
+        x = torch.nn.functional.conv2d(gray_image, gau_filter, stride=1, padding=9)
+        return x
+
+    def high_freq_position_embedding(self, x):
+        x = self.laplace_pyramid(x)
+        freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dim).cuda()
+        for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
+            for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
+                freq_embed[:, num_i * 48 + num_j, 0: 32*32] = x[:, 0, i: i+32, j: j+32].flatten(1)
+        return freq_embed
+
     def _conv_filter(self, state_dict, patch_size=16):
         """ convert patch embedding weight from manual patchify + linear proj to conv"""
         out_dict = {}
@@ -391,6 +421,12 @@ class VisionTransformer(nn.Module):
 
     def forward(self, x):
         B = x.shape[0]
+
+        if self.high_freq_pos_embed:
+            gau_embed = self.high_freq_position_embedding(x)
+            add_token_position = self.pos_embed[0, 0, :].unsqueeze(0).unsqueeze(0).expand(B, -1, -1)
+            gau_embed = torch.cat((add_token_position, gau_embed), dim=1)
+
         x = self.patch_embed(x)
 
         x = x.flatten(2).transpose(1, 2)
@@ -400,6 +436,9 @@ class VisionTransformer(nn.Module):
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
         x = self.pos_drop(x)
+
+        if self.high_freq_pos_embed:
+            x = x + gau_embed
 
         outs = []
         for i, blk in enumerate(self.blocks):

@@ -114,6 +114,7 @@ data
 work_dirs/
 transfer/
 distributed/
+results/
 
 # Pytorch
 *.pth

@@ -1,7 +1,7 @@
 _base_ = [
     '../_base_/models/mrmd.py',
     '../_base_/datasets/cityscapes_768x768.py', '../_base_/default_runtime.py',
-    '../_base_/schedules/schedule_80k.py'
+    '../_base_/schedules/schedule_40k.py'
 ]
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 optimizer = dict(lr=0.01, weight_decay=0.0,
