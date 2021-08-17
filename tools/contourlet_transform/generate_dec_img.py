@@ -1,0 +1,69 @@
+from torch.utils import data
+import torch
+import cv2
+from contourlet_dec import ContourletDec
+import os
+import numpy as np
+from PIL import Image
+from tools.shownsct import shownsct, save_nsct, load_nsct, torch_lst2np_lst, norm_features
+from tqdm import tqdm
+
+
+class CityscapesImages(data.Dataset):
+    def __init__(self, root, list_path):
+        self.root = root
+        self.list_path = list_path
+
+        self.img_list = [line.strip().split()[0] for line in open(os.path.join(root, list_path))]
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __getitem__(self, index):
+        img = Image.open(os.path.join(self.root, self.img_list[index])).convert('L')
+        # img = img.resize((512, 256))
+        img = np.array(img)
+        img_path = os.path.join(self.root, self.img_list[index])
+        return img.copy(), img_path
+
+
+def main():
+    # get filters
+    levels = [0, 1, 2]
+    pfilter = 'maxflat'
+    dfilter = 'dmaxflat7'
+    nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
+
+    # get dataloader
+    dec_dataset = CityscapesImages('../../data/cityscapes', 'train.lst')
+    dec_loader = torch.utils.data.DataLoader(
+        dec_dataset,
+        batch_size=1,
+        num_workers=2,
+        pin_memory=True
+    )
+
+    for i, batch in tqdm(enumerate(dec_loader), total=dec_dataset.__len__()):
+        # batch = Image.open('zoneplate.png')
+        # batch = [torch.from_numpy(np.array(batch)).unsqueeze(0), '/data']
+        if nsct.gpu:
+            img = batch[0].squeeze(0).float().cuda()
+            img_path = batch[1][0]
+        else:
+            img = batch[0].squeeze(0).numpy()
+            img_path = batch[1][0]
+
+        y = nsct.dec_iter(img)
+
+        # shownsct(y, nsct.gpu)
+        save_nsct(y, img_path, nsct.gpu)
+        # break
+        # a = load_nsct(img_path)
+        # b = norm_features(y)
+        # b = torch_lst2np_lst(b)
+        # a = b
+
+
+
+if __name__ == '__main__':
+    main()
