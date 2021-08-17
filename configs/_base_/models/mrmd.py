@@ -4,10 +4,11 @@ model = dict(
     type='EncoderDecoder',
     pretrained=dict(
             vit_pretrained='/document/detr/transfer/jx_vit_large_p16_384.pth',
-            resnet_pretrained='/document/detr/transfer/resnet50.pth'
+            resnet_pretrained=None
         ),
     backbone=dict(
         type='VIT_CNN',
+        norm_cfg=norm_cfg,
         vit_backbone=dict(
             type='VisionTransformer',
             model_name='vit_large_patch16_384',

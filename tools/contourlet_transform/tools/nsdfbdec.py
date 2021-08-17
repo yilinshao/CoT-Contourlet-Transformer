@@ -1,7 +1,7 @@
 from .nssfbdec import *
 from tqdm import tqdm
 
-def nsdfbdec(x, dfilter, clevels, gpu_mode=False, index_dict=None):
+def nsdfbdec(x, dfilter, clevels, gpu_mode=False):
     k1 = dfilter[0]
     k2 = dfilter[1]
 
@@ -11,19 +11,19 @@ def nsdfbdec(x, dfilter, clevels, gpu_mode=False, index_dict=None):
     q1 = [[1, -1], [1, 1]]
     y = []
     if clevels == 1:
-        y1, y2 = nssfbdec(x, k1, k2, clevels, stage=1)
+        y1, y2 = nssfbdec(x, k1, k2, gpu_mode=gpu_mode)
         y.append(y1)
         y.append(y2)
     else:
-        x1, x2 = nssfbdec(x, k1, k2, clevels, stage=1)
-        y1, y2 = nssfbdec(x1, k1, k2, clevels, stage=2, mup=q1, gpu_mode=gpu_mode, index_dict=index_dict)
-        y3, y4 = nssfbdec(x2, k1, k2, clevels, stage=2, mup=q1, gpu_mode=gpu_mode, index_dict=index_dict)
+        x1, x2 = nssfbdec(x, k1, k2, gpu_mode=gpu_mode)
+        y1, y2 = nssfbdec(x1, k1, k2, mup=q1, gpu_mode=gpu_mode)
+        y3, y4 = nssfbdec(x2, k1, k2, mup=q1, gpu_mode=gpu_mode)
         y.append(y1)
         y.append(y2)
         y.append(y3)
         y.append(y4)
 
-        for l in tqdm(range(3, clevels + 1), desc='levels'):
+        for l in range(3, clevels + 1):
             y_old = y
             y = [None for i in range(2**l)]
             for k in range(1, 2**(l-2) + 1):

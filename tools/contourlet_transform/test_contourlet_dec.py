@@ -21,7 +21,7 @@ def main(im):
     dfilter = 'dmaxflat7'
 
     nsct = ContourletDec(levels, dfilter, pfilter)
-    coeffs = nsct.nsctdec(im, gpu_mode=True)
+    coeffs = nsct.nsctdec(im, gpu_mode=False)
 
     # Display the coefficients
     print('Displaying the contourlet coefficients...')
@@ -31,8 +31,9 @@ def main(im):
 if __name__ == '__main__':
     # img = np.asarray(io.imread('zoneplate.png'), dtype=np.float64)
 
-    img = Image.open('/Document/SETR/data/cityscapes/leftImg8bit/train/aachen/aachen_000000_000019_leftImg8bit.png').convert('L')
-    img = img.resize((512, 256))
+    img = Image.open('/document/detr/data/cityscapes/leftImg8bit/train/aachen/aachen_000000_000019_leftImg8bit.png').convert('L')
+    img = img.resize((256, 128))
     img = numpy.array(img)
     main(img)
+
 

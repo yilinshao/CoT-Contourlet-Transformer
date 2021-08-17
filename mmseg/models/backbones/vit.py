@@ -286,7 +286,7 @@ class VisionTransformer(nn.Module):
 
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
+                 drop_path_rate=0., out_indices=None, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
                  pos_embed_interp=False, high_freq_pos_embed=False, random_init=False, align_corners=False, **kwargs):
         super(VisionTransformer, self).__init__(**kwargs)
         self.model_name = model_name
@@ -311,7 +311,10 @@ class VisionTransformer(nn.Module):
         self.align_corners = align_corners
 
         self.num_stages = self.depth
-        self.out_indices = tuple(range(self.num_stages))
+        if out_indices is None:
+            self.out_indices = tuple(range(self.num_stages))
+        else:
+            self.out_indices = out_indices
 
         self.high_freq_pos_embed = high_freq_pos_embed
         if high_freq_pos_embed:
@@ -388,11 +391,23 @@ class VisionTransformer(nn.Module):
     def laplace_pyramid(self, x):
         gray_image = torchvision.transforms.Grayscale()(x)
         gau_filter = self.gaussian_filter.unsqueeze(0).unsqueeze(0)
-        x = torch.nn.functional.conv2d(gray_image, gau_filter, stride=1, padding=9)
-        return x
+        low_pass = torch.nn.functional.conv2d(gray_image, gau_filter, stride=1, padding=1)
+        res_high_freq = gray_image - low_pass
+
+        # import matplotlib.pyplot as plt
+        # x_image_np = low_pass[0].squeeze(0).cpu().numpy()
+        # y_image_np = res_high_freq[0].squeeze(0).cpu().numpy()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(x_image_np, cmap='gray')
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(y_image_np, cmap='gray')
+        # plt.show()
+        return res_high_freq
 
     def high_freq_position_embedding(self, x):
         x = self.laplace_pyramid(x)
+        pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
+        x = pad_margin(x)
         freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dim).cuda()
         for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
             for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
@@ -445,4 +460,6 @@ class VisionTransformer(nn.Module):
             x = blk(x)
             if i in self.out_indices:
                 outs.append(x)
+            else:
+                outs.append(None)
         return tuple(outs)

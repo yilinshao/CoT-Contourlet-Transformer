@@ -76,15 +76,18 @@ class VisionTransformerUpHead(BaseDecodeHead):
 
     def __init__(self, img_size=768, embed_dim=1024,
                  norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
-                 num_conv=1, upsampling_method='bilinear', num_upsampe_layer=1, conv3x3_conv1x1=True, **kwargs):
+                 num_conv=1, upsampling_method='bilinear', num_upsampe_layer=1, conv3x3_conv1x1=True, depth_select=False, **kwargs):
         super(VisionTransformerUpHead, self).__init__(**kwargs)
         self.img_size = img_size
         self.norm_cfg = norm_cfg
         self.num_conv = num_conv
         self.norm = norm_layer(embed_dim)
+        if depth_select:
+            _, self.norm = build_norm_layer(self.norm_cfg, depth_select)
         self.upsampling_method = upsampling_method
         self.num_upsampe_layer = num_upsampe_layer
         self.conv3x3_conv1x1 = conv3x3_conv1x1
+        self.depth_select = depth_select
 
         out_channel = self.num_classes
 
@@ -127,10 +130,13 @@ class VisionTransformerUpHead(BaseDecodeHead):
 
     def forward(self, x):
         x = self._transform_inputs(x)
+        if self.depth_select:
+            x = x[:, :, 0: self.depth_select]
         if x.dim() == 3:
             if x.shape[1] % 48 != 0:
                 x = x[:, 1:]
-            x = self.norm(x)
+            if not self.depth_select:
+                x = self.norm(x)
 
         if self.upsampling_method == 'bilinear':
             if x.dim() == 3:

@@ -3,14 +3,29 @@ from tqdm import tqdm
 import torch
 from torch.nn.functional import conv2d
 import time
+import torch.nn as nn
 
 
-def zconv2(signal, filter, nsdf_level, stage, num, mmatrix, gpu_mode=False, index_dict=None):
+def transform_filter(dir_filter):
+    FColLength, FRowLength = dir_filter.shape
+    new_filters = torch.zeros(2 * FColLength - 1, 2 * FRowLength - 1).float().cuda()
+    index_mapping = torch.zeros(FColLength, FRowLength, 2).int().cuda()
+    for i in range(FRowLength):
+        index_mapping[:, i, 0] = torch.arange(new_filters.shape[0] - 1 - i, new_filters.shape[0] - 1 - i - FColLength, -1).int()
+        index_mapping[:, i, 1] = torch.arange(FRowLength - 1 - i, FRowLength - 1 - i + FColLength).int()
+
+    new_filters[index_mapping.reshape(-1, 2)[:, 0].long(), index_mapping.reshape(-1, 2)[:, 1].long()] = dir_filter.reshape(-1, )
+    return new_filters
+
+
+
+
+def zconv2(signal, dir_filter, mmatrix, gpu_mode=False):
 
     SColLength, SRowLength = signal.shape
-    FColLength, FRowLength = filter.shape
+    FColLength, FRowLength = dir_filter.shape
 
-    FArray = filter
+    FArray = dir_filter
     SArray = signal
     M = np.asarray(mmatrix)
 
@@ -30,9 +45,9 @@ def zconv2(signal, filter, nsdf_level, stage, num, mmatrix, gpu_mode=False, inde
     mn1 = Start1 % SRowLength
     mn2 = mn2save = Start2 % SColLength
 
-    index = np.zeros((FColLength * FRowLength * SColLength * SRowLength, 2)).astype(np.int)
+    # index = np.zeros((FColLength * FRowLength * SColLength * SRowLength, 2)).astype(np.int)
 
-    filter_size = FRowLength * FColLength
+    # filter_size = FRowLength * FColLength
 
     if gpu_mode is not True:
         for n1 in tqdm(range(SRowLength), desc='n1'):
@@ -45,9 +60,9 @@ def zconv2(signal, filter, nsdf_level, stage, num, mmatrix, gpu_mode=False, inde
                     indexx = outindexx
                     indexy = outindexy
                     for l2 in range(FColLength):
-                        sum += SArray[indexy, indexx]*FArray[l2, l1]
-                        index[(n1 * SColLength + n2) * filter_size + (l1 * FColLength + l2), 0] = indexy
-                        index[(n1 * SColLength + n2) * filter_size + (l1 * FColLength + l2), 1] = indexx
+                        sum += SArray[indexy, indexx] * FArray[l2, l1]
+                        # index[(n1 * SColLength + n2) * filter_size + (l1 * FColLength + l2), 0] = indexy
+                        # index[(n1 * SColLength + n2) * filter_size + (l1 * FColLength + l2), 1] = indexx
                         # sum = 0
                         # print('S:[{}, {}], F[{}, {}]'.format(indexy, indexx, l2, l1))
                         indexx -= M2
@@ -77,28 +92,13 @@ def zconv2(signal, filter, nsdf_level, stage, num, mmatrix, gpu_mode=False, inde
             mn1 += 1
             if mn1 > SRowLength - 1:
                 mn1 -= SRowLength
-        save_npy_name = '/data/level_012_nsdfb_level{}_stage{}_zconv{}.npy'.format(nsdf_level, stage, num)
-
-        np.save(save_npy_name, index)
-        print('Wrote index to /data/level_012_nsdfb_level{}_stage{}_zconv{}.npy'.format(nsdf_level, stage, num))
 
     else:
-        load_npy_name = 'level_012_nsdfb_level{}_stage{}_zconv{}'.format(nsdf_level, stage, num)
+        signal = signal.unsqueeze(0).unsqueeze(0)
+        dir_filter = transform_filter(dir_filter).unsqueeze(0).unsqueeze(0)
 
-        index = torch.from_numpy(index_dict[load_npy_name]).cuda()
-        SArray_cuda = torch.from_numpy(SArray).cuda()
-        grid_image = SArray_cuda[index[:, 0], index[:, 1]].reshape((SRowLength, SColLength, FRowLength, FColLength))
-
-        grid_image = grid_image.permute((0, 2, 1, 3)).reshape((SRowLength*FRowLength, SColLength*FColLength))
-
-        grid_image = grid_image.unsqueeze(0).unsqueeze(0)
-
-        FArray_cuda = torch.from_numpy(FArray[:, ::-1].copy()).unsqueeze(0).unsqueeze(0).cuda()
-
-        outArray = conv2d(grid_image, FArray_cuda, stride=FColLength)
-
+        pad = nn.ReflectionPad2d(padding=(FColLength - 1, FColLength - 1, FColLength - 1, FColLength - 1))
+        signal = pad(signal)
+        outArray = torch.nn.functional.conv2d(signal, dir_filter)
         outArray = outArray.squeeze(0).squeeze(0)
-        outArray = outArray.cpu().numpy().transpose(1, 0)
-
-
     return outArray
