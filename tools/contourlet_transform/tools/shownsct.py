@@ -3,7 +3,7 @@ import os
 import numpy as np
 
 def shownsct(y, gpu):
-    y = norm_features(y)
+    # y = norm_features(y)
     if gpu:
         y = torch_lst2np_lst(y)
     clevels = len(y)
@@ -34,8 +34,21 @@ def torch_lst2np_lst(filter_list):
         for filter_instance in filter_list:
             new_list.append(torch_lst2np_lst(filter_instance))
         return new_list
+    elif filter_list.ndim == 4:
+        return filter_list[0, 0].cpu().numpy()
     else:
         return filter_list.cpu().numpy()
+
+
+def np_lst2np_stack(feature_lst):
+    out = np.expand_dims(feature_lst[0], axis=2)
+    for feature in feature_lst[1:]:
+        if isinstance(feature, list):
+            for direction in feature:
+                out = np.concatenate((out, np.expand_dims(direction, axis=2)), axis=2)
+        else:
+            out = np.concatenate((out, np.expand_dims(feature, axis=2)), axis=2)
+    return out
 
 
 def norm_features(y):
@@ -51,26 +64,16 @@ def norm_features(y):
 
 
 def save_nsct(y, img_dir, gpu):
-    folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct')
+    # print(img_dir)
+    folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct')
     os.makedirs(folder, exist_ok=True)
 
-    save_dir = os.path.join(folder, os.path.basename(img_dir).replace('.png', ''))
+    save_dir = os.path.join(folder, os.path.basename(img_dir).replace('.png', '').replace('.jpg', ''))
     y = norm_features(y)
     if gpu:
         y = torch_lst2np_lst(y)
+        y = np_lst2np_stack(y)
     np.save(save_dir, y)
-
-    # clevels = len(y)
-    # for i in range(clevels):
-    #     if isinstance(y[i], list):
-    #         csubband = len(y[i])
-    #         for j in range(csubband):
-    #             y[i][j] = ((y[i][j] - np.mean(y[i][j])) / np.std(y[i][j]))
-    #             np.save(os.path.join(save_dir, img_name + '{}-{}.png'.format(i, j)), y[i][j])
-    #
-    #     else:
-    #         y[i] = ((y[i] - np.mean(y[i])) / np.std(y[i]))
-    #         np.save(os.path.join(save_dir, img_name + '{}.png'.format(i)), y[i])
 
 
 def load_nsct(img_dir):

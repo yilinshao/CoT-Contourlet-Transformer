@@ -15,10 +15,8 @@ def transform_filter(p_filter, m0, m3):
 
 
 def atrous(signal, filter, mmatrix, gpu_mode=False):
-    SColLength = signal.shape[0]
-    SRowLength = signal.shape[1]
-    FColLength = filter.shape[0]
-    FRowLength = filter.shape[1]
+    SColLength, SRowLength = signal.shape[-2:]
+    FColLength, FRowLength = filter.shape[-2:]
 
     SFColLength = FColLength - 1
     SFRowLength = FRowLength - 1
@@ -57,8 +55,8 @@ def atrous(signal, filter, mmatrix, gpu_mode=False):
                 outArray[n2, n1] = sum
                 # print('*'*20)
     else:
-        signal = signal.unsqueeze(0).unsqueeze(0)
-        p_filter = transform_filter(filter.unsqueeze(0).unsqueeze(0), M0, M3).unsqueeze(0).unsqueeze(0)
-        outArray = conv2d(signal.float(), p_filter).squeeze(0).squeeze(0)
+        signal = signal
+        p_filter = transform_filter(filter, M0, M3).unsqueeze(0).unsqueeze(0)
+        outArray = conv2d(signal.float(), p_filter)
 
     return outArray

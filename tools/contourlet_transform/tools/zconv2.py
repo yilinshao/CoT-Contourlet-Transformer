@@ -7,6 +7,7 @@ import torch.nn as nn
 
 
 def transform_filter(dir_filter):
+    dir_filter = dir_filter.squeeze(0).squeeze(0)
     FColLength, FRowLength = dir_filter.shape
     new_filters = torch.zeros(2 * FColLength - 1, 2 * FRowLength - 1).float().cuda()
     index_mapping = torch.zeros(FColLength, FRowLength, 2).int().cuda()
@@ -15,15 +16,13 @@ def transform_filter(dir_filter):
         index_mapping[:, i, 1] = torch.arange(FRowLength - 1 - i, FRowLength - 1 - i + FColLength).int()
 
     new_filters[index_mapping.reshape(-1, 2)[:, 0].long(), index_mapping.reshape(-1, 2)[:, 1].long()] = dir_filter.reshape(-1, )
-    return new_filters
-
-
+    return new_filters.unsqueeze(0).unsqueeze(0)
 
 
 def zconv2(signal, dir_filter, mmatrix, gpu_mode=False):
 
-    SColLength, SRowLength = signal.shape
-    FColLength, FRowLength = dir_filter.shape
+    SColLength, SRowLength = signal.shape[-2:]
+    FColLength, FRowLength = dir_filter.shape[-2:]
 
     FArray = dir_filter
     SArray = signal
@@ -94,11 +93,9 @@ def zconv2(signal, dir_filter, mmatrix, gpu_mode=False):
                 mn1 -= SRowLength
 
     else:
-        signal = signal.unsqueeze(0).unsqueeze(0)
-        dir_filter = transform_filter(dir_filter).unsqueeze(0).unsqueeze(0)
+        dir_filter = transform_filter(dir_filter)
 
         pad = nn.ReflectionPad2d(padding=(FColLength - 1, FColLength - 1, FColLength - 1, FColLength - 1))
         signal = pad(signal)
         outArray = torch.nn.functional.conv2d(signal, dir_filter)
-        outArray = outArray.squeeze(0).squeeze(0)
     return outArray

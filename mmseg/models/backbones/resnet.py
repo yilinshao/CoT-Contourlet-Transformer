@@ -582,22 +582,29 @@ class ResNet(nn.Module):
 
     def _freeze_stages(self):
         """Freeze stages param and norm stats."""
-        if self.frozen_stages >= 0:
-            if self.deep_stem:
-                self.stem.eval()
-                for param in self.stem.parameters():
+        if isinstance(self.frozen_stages, list):
+            for i in self.frozen_stages:
+                m = getattr(self, f'layer{i}')
+                m.eval()
+                for param in m.parameters():
                     param.requires_grad = False
-            else:
-                self.norm1.eval()
-                for m in [self.conv1, self.norm1]:
-                    for param in m.parameters():
+        else:
+            if self.frozen_stages >= 0:
+                if self.deep_stem:
+                    self.stem.eval()
+                    for param in self.stem.parameters():
                         param.requires_grad = False
+                else:
+                    self.norm1.eval()
+                    for m in [self.conv1, self.norm1]:
+                        for param in m.parameters():
+                            param.requires_grad = False
 
-        for i in range(1, self.frozen_stages + 1):
-            m = getattr(self, f'layer{i}')
-            m.eval()
-            for param in m.parameters():
-                param.requires_grad = False
+            for i in range(1, self.frozen_stages + 1):
+                m = getattr(self, f'layer{i}')
+                m.eval()
+                for param in m.parameters():
+                    param.requires_grad = False
 
     def init_weights(self, pretrained=None):
         """Initialize the weights in backbone.
@@ -642,6 +649,8 @@ class ResNet(nn.Module):
         x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
+            if isinstance(self.frozen_stages, list) and i + 1 in self.frozen_stages:
+                continue
             res_layer = getattr(self, layer_name)
             x = res_layer(x)
             if i in self.out_indices:

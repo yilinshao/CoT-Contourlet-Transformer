@@ -5,6 +5,7 @@ import math
 from itertools import repeat
 from torch._six import container_abcs
 import warnings
+import torch.nn.functional as F
 
 from .helpers import load_pretrained
 # from .layers import DropPath, to_2tuple, trunc_normal_
@@ -329,6 +330,72 @@ class Conv_MLA(nn.Module):
         return mla_p2, mla_p3, mla_p4, mla_p5
 
 
+class NsctFusion(nn.Module):
+    def __init__(self, in_channels=(1024, 512, 512, 512), mla_channels=256, norm_cfg=None):
+        super(NsctFusion, self).__init__()
+        self.tf_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[0], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.nsct_1_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[1], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.nsct_2_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[2], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.nsct_3_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[3], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+
+        self.nsct_1 = nn.Sequential(nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU())
+        self.nsct_2 = nn.Sequential(nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU())
+        self.nsct_3 = nn.Sequential(nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU())
+
+    def to_2D(self, x):
+        n, hw, c = x.shape
+        h = w = int(math.sqrt(hw))
+        x = x.transpose(1, 2).reshape(n, c, h, w)
+        return x
+
+    def forward(self, tf_feature, nsct_1, nsct_2, nsct_3):
+
+        tf_feature = F.interpolate(self.to_2D(tf_feature), nsct_1.shape[-1], mode='bilinear', align_corners=True)
+
+        tf_feature = self.tf_1x1(tf_feature)
+        nsct_1_1x1 = self.nsct_1_1x1(nsct_1)
+        nsct_2_1x1 = self.nsct_2_1x1(nsct_2)
+        nsct_3_1x1 = self.nsct_3_1x1(nsct_3)
+
+        nsct_1_plus = tf_feature + nsct_1_1x1
+        nsct_1_plus = self.nsct_1(nsct_1_plus)
+
+        nsct_2_plus = nsct_1_plus + nsct_2_1x1
+        nsct_2_plus = self.nsct_2(nsct_2_plus)
+
+        nsct_3_plus = nsct_2_plus + nsct_3_1x1
+        nsct_3_plus = self.nsct_3(nsct_3_plus)
+        return tf_feature, nsct_1_plus, nsct_2_plus, nsct_3_plus
+
+
 @BACKBONES.register_module()
 class VIT_MLA(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
@@ -336,7 +403,7 @@ class VIT_MLA(nn.Module):
 
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
-                 drop_path_rate=0., hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
+                 drop_path_rate=0., fuse_nsct=False, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
                  pos_embed_interp=False, random_init=False, align_corners=False, mla_channels=256,
                  mla_index=(5, 11, 17, 23), **kwargs):
         super(VIT_MLA, self).__init__(**kwargs)
@@ -362,6 +429,7 @@ class VIT_MLA(nn.Module):
         self.align_corners = align_corners
         self.mla_channels = mla_channels
         self.mla_index = mla_index
+        self.fuse_nsct = fuse_nsct
 
         self.num_stages = self.depth
         self.out_indices = tuple(range(self.num_stages))
@@ -387,8 +455,12 @@ class VIT_MLA(nn.Module):
                 drop=self.drop_rate, attn_drop=self.attn_drop_rate, drop_path=dpr[i], norm_layer=self.norm_layer)
             for i in range(self.depth)])
 
-        self.mla = Conv_MLA(in_channels=self.embed_dim,
-                            mla_channels=self.mla_channels, norm_cfg=self.norm_cfg)
+        if self.fuse_nsct:
+            self.nsct_fusion = NsctFusion(in_channels=(self.embed_dim, 512, 512, 512), mla_channels=self.mla_channels,
+                                          norm_cfg=self.norm_cfg)
+        else:
+            self.mla = Conv_MLA(in_channels=self.embed_dim,
+                                mla_channels=self.mla_channels, norm_cfg=self.norm_cfg)
 
         self.norm_0 = norm_layer(self.embed_dim)
         self.norm_1 = norm_layer(self.embed_dim)
@@ -441,7 +513,7 @@ class VIT_MLA(nn.Module):
             out_dict[k] = v
         return out_dict
 
-    def forward(self, x):
+    def forward(self, x, **kwargs):
         B = x.shape[0]
         x = self.patch_embed(x)
         x = x.flatten(2).transpose(1, 2)
@@ -458,12 +530,22 @@ class VIT_MLA(nn.Module):
             x = blk(x)
             if i in self.out_indices:
                 outs.append(x)
+        if self.fuse_nsct:
+            assert kwargs is not None
+            tf_feature = self.norm_3(outs[self.mla_index[3]])
+            tf_feature, nsct_1, nsct_2, nsct_3 = self.nsct_fusion(tf_feature, kwargs['nsct_features'][0],
+                                                                  kwargs['nsct_features'][1],
+                                                                  kwargs['nsct_features'][2])
+            return (tf_feature, nsct_1, nsct_2, nsct_3)
 
-        c6 = self.norm_0(outs[self.mla_index[0]])
-        c12 = self.norm_1(outs[self.mla_index[1]])
-        c18 = self.norm_2(outs[self.mla_index[2]])
-        c24 = self.norm_3(outs[self.mla_index[3]])
 
-        p6, p12, p18, p24 = self.mla(c6, c12, c18, c24)
+        else:
+            c6 = self.norm_0(outs[self.mla_index[0]])
+            c12 = self.norm_1(outs[self.mla_index[1]])
+            c18 = self.norm_2(outs[self.mla_index[2]])
+            c24 = self.norm_3(outs[self.mla_index[3]])
 
-        return (p6, p12, p18, p24)
+            p6, p12, p18, p24 = self.mla(c6, c12, c18, c24)
+
+            return (p6, p12, p18, p24)
+

@@ -7,6 +7,7 @@ from mmseg.ops import resize
 from .. import builder
 from ..builder import SEGMENTORS
 from .base import BaseSegmentor
+import time
 
 
 @SEGMENTORS.register_module()
@@ -153,9 +154,9 @@ class EncoderDecoder(BaseSegmentor):
         x = self.extract_feat(img)
 
         losses = dict()
-
         loss_decode = self._decode_head_forward_train(x, img_metas,
                                                       gt_semantic_seg)
+
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:

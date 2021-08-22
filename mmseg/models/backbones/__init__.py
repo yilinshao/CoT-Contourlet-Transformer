@@ -7,6 +7,7 @@ from .resnext import ResNeXt
 from .vit import VisionTransformer
 from .vit_mla import VIT_MLA
 from .vit_cnn import VIT_CNN
+from .vit_nsct import VIT_NSCT
 
 __all__ = [
     'ResNet', 'ResNetV1c', 'ResNetV1d', 'ResNeXt', 'HRNet', 'FastSCNN',

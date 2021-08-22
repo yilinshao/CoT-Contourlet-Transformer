@@ -94,7 +94,7 @@ class ContourletDec:
                 new_list.append(self.np_lst2torch_lst(filter_instance))
             return new_list
         else:
-            return torch.from_numpy(filter_list).float().cuda()
+            return torch.from_numpy(filter_list).unsqueeze(0).unsqueeze(0).float().cuda()
 
     def get_filters(self):
         filters = []
@@ -108,8 +108,8 @@ class ContourletDec:
         filters.append(h2)
         h1, h2, _, _ = atrousfilters(self.pfilter)
         if self.gpu:
-            h1 = torch.from_numpy(h1).cuda().float()
-            h2 = torch.from_numpy(h2).cuda().float()
+            h1 = torch.from_numpy(h1).unsqueeze(0).unsqueeze(0).cuda().float()
+            h2 = torch.from_numpy(h2).unsqueeze(0).unsqueeze(0).cuda().float()
             filters = self.np_lst2torch_lst(filters)
         return h1, h2, filters
 
@@ -119,7 +119,7 @@ class ContourletDec:
         for i in range(1, self.clevels + 1):
             # print('Start nsfb level {}'.format(self.levels[nIndex - 2]))
             # start_time = time.time()
-            xlo, xhi = nsfbdec(x, self.h1, self.h2, i - 1, gpu_mode=self.gpu, nlevel=self.levels[self.nIndex - 2])
+            xlo, xhi = nsfbdec(x, self.h1, self.h2, i - 1, gpu_mode=self.gpu)
             # end_time = time.time()
             # print('Finish nsfb level {}'.format(self.levels[nIndex - 2]))
             # print("Time:%.2fs" % (end_time - start_time))

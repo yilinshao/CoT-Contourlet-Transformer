@@ -7,6 +7,7 @@ import numpy as np
 from PIL import Image
 from tools.shownsct import shownsct, save_nsct, load_nsct, torch_lst2np_lst, norm_features
 from tqdm import tqdm
+import time
 
 
 class CityscapesImages(data.Dataset):
@@ -27,6 +28,24 @@ class CityscapesImages(data.Dataset):
         return img.copy(), img_path
 
 
+class PascalContext(data.Dataset):
+    def __init__(self, root):
+        self.root = root
+        self.img_list = os.listdir(root)
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __getitem__(self, index):
+        img = Image.open(os.path.join(self.root, self.img_list[index])).convert('L')
+        # img = Image.open('../../data/VOCdevkit/VOC2010/JPEGImages/2008_001823.jpg').convert('L')
+
+        # img = img.resize((512, 256))
+        img = np.array(img)
+        img_path = os.path.join(self.root, self.img_list[index])
+        return img.copy(), img_path
+
+
 def main():
     # get filters
     levels = [0, 1, 2]
@@ -35,7 +54,8 @@ def main():
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
-    dec_dataset = CityscapesImages('../../data/cityscapes', 'train.lst')
+    # dec_dataset = CityscapesImages('../../data/cityscapes', 'train.lst')
+    dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
     dec_loader = torch.utils.data.DataLoader(
         dec_dataset,
         batch_size=1,
@@ -47,13 +67,16 @@ def main():
         # batch = Image.open('zoneplate.png')
         # batch = [torch.from_numpy(np.array(batch)).unsqueeze(0), '/data']
         if nsct.gpu:
-            img = batch[0].squeeze(0).float().cuda()
+            img = batch[0].unsqueeze(0).float().cuda()
             img_path = batch[1][0]
         else:
             img = batch[0].squeeze(0).numpy()
             img_path = batch[1][0]
 
+        # start_time = time.time()
         y = nsct.dec_iter(img)
+        # end_time = time.time()
+        # print("Time:%.2fs" % (end_time - start_time))
 
         # shownsct(y, nsct.gpu)
         save_nsct(y, img_path, nsct.gpu)

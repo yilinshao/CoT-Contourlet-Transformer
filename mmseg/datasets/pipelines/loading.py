@@ -151,3 +151,25 @@ class LoadAnnotations(object):
         repr_str += f'(reduce_zero_label={self.reduce_zero_label},'
         repr_str += f"imdecode_backend='{self.imdecode_backend}')"
         return repr_str
+
+
+@PIPELINES.register_module()
+class LoadNsctNpy(object):
+
+    def __call__(self, results):
+
+        if results.get('nsct_prefix') is not None:
+            filename = osp.join(results['nsct_prefix'],
+                                results['nsct_info']['nsct_feature'])
+        else:
+            filename = results['nsct_info']['nsct_feature']
+        nsct_feature = np.load(filename)
+
+        # import matplotlib.pyplot as plt
+        # for i in range(nsct_feature.shape[-1]):
+        #     plt.imshow(nsct_feature[:, :, i], cmap='gray')
+        #     plt.title('level{}'.format(i))
+        #     plt.show()
+
+        results['nsct_feature'] = nsct_feature
+        return results

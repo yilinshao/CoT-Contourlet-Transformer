@@ -39,7 +39,7 @@ class Resize(object):
                  ratio_range=None,
                  keep_ratio=True,
                  crop_size=None,
-                 setr_multi_scale=False):
+                 setr_multi_scale=False,):
 
         if img_scale is None:
             self.img_scale = None
@@ -243,6 +243,42 @@ class Resize(object):
 
 
 @PIPELINES.register_module()
+class ResizeWithNSCT(Resize):
+    def __init__(self, **kwargs):
+        super(ResizeWithNSCT, self).__init__(**kwargs)
+
+    def _resize_nsct(self, results):
+        if self.keep_ratio:
+            results['nsct_feature'] = mmcv.imrescale(results['nsct_feature'], results['scale'])
+        else:
+            results['nsct_feature'] = mmcv.imresize(results['nsct_feature'], results['scale'])
+
+            # import matplotlib.pyplot as plt
+            # for i in range(resized_feat.shape[-1]):
+            #     plt.imshow(resized_feat[:, :, i], cmap='gray')
+            #     plt.title('level{}'.format(i))
+            #     plt.show()
+
+    def __call__(self, results):
+        """Call function to resize images, bounding boxes, masks, semantic
+        segmentation map.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Resized results, 'img_shape', 'pad_shape', 'scale_factor',
+                'keep_ratio' keys are added into result dict.
+        """
+
+        if 'scale' not in results:
+            self._random_scale(results)
+        self._resize_img(results)
+        self._resize_seg(results)
+        self._resize_nsct(results)
+        return results
+
+@PIPELINES.register_module()
 class RandomFlip(object):
     """Flip the image & seg.
 
@@ -294,6 +330,45 @@ class RandomFlip(object):
 
     def __repr__(self):
         return self.__class__.__name__ + f'(flip_ratio={self.flip_ratio})'
+
+
+@PIPELINES.register_module()
+class RandomFlipWithNSCT(RandomFlip):
+    def __init__(self, **kwargs):
+        super(RandomFlipWithNSCT, self).__init__(**kwargs)
+
+    def __call__(self, results):
+        """Call function to flip bounding boxes, masks, semantic segmentation
+        maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Flipped results, 'flip', 'flip_direction' keys are added into
+                result dict.
+        """
+
+        if 'flip' not in results:
+            flip = True if np.random.rand() < self.flip_ratio else False
+            results['flip'] = flip
+        if 'flip_direction' not in results:
+            results['flip_direction'] = self.direction
+        if results['flip']:
+            # flip image
+            results['img'] = mmcv.imflip(
+                results['img'], direction=results['flip_direction'])
+
+            # flip segs
+            for key in results.get('seg_fields', []):
+                # use copy() to make numpy stride positive
+                results[key] = mmcv.imflip(
+                    results[key], direction=results['flip_direction']).copy()
+
+            # flip nsct
+            results['nsct_feature'] = mmcv.imflip(results['nsct_feature'], direction=results['flip_direction']).copy()
+
+        return results
 
 
 @PIPELINES.register_module()
@@ -365,6 +440,32 @@ class Pad(object):
         repr_str += f'(size={self.size}, size_divisor={self.size_divisor}, ' \
                     f'pad_val={self.pad_val})'
         return repr_str
+
+@PIPELINES.register_module()
+class PadWithNSCT(Pad):
+    def __init__(self, **kwargs):
+        super(PadWithNSCT, self).__init__(**kwargs)
+
+    def _pad_nsct(self, results):
+        results['nsct_feature'] = mmcv.impad(
+            results['nsct_feature'],
+            shape=results['pad_shape'][:2],
+            pad_val=self.pad_val)
+
+    def __call__(self, results):
+        """Call function to pad images, masks, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Updated result dict.
+        """
+
+        self._pad_img(results)
+        self._pad_seg(results)
+        self._pad_nsct(results)
+        return results
 
 
 @PIPELINES.register_module()
@@ -480,6 +581,51 @@ class RandomCrop(object):
 
     def __repr__(self):
         return self.__class__.__name__ + f'(crop_size={self.crop_size})'
+
+
+@PIPELINES.register_module()
+class RandomCropWithNSCT(RandomCrop):
+    def __init__(self, **kwargs):
+        super(RandomCropWithNSCT, self).__init__(**kwargs)
+
+    def __call__(self, results):
+        """Call function to randomly crop images, semantic segmentation maps.
+
+        Args:
+            results (dict): Result dict from loading pipeline.
+
+        Returns:
+            dict: Randomly cropped results, 'img_shape' key in result dict is
+                updated according to crop size.
+        """
+
+        img = results['img']
+        crop_bbox = self.get_crop_bbox(img)
+        if self.cat_max_ratio < 1.:
+            # Repeat 10 times
+            for _ in range(10):
+                seg_temp = self.crop(results['gt_semantic_seg'], crop_bbox)
+                labels, cnt = np.unique(seg_temp, return_counts=True)
+                cnt = cnt[labels != self.ignore_index]
+                if len(cnt) > 1 and np.max(cnt) / np.sum(
+                        cnt) < self.cat_max_ratio:
+                    break
+                crop_bbox = self.get_crop_bbox(img)
+
+        # crop the image
+        img = self.crop(img, crop_bbox)
+        img_shape = img.shape
+        results['img'] = img
+        results['img_shape'] = img_shape
+
+        # crop semantic seg
+        for key in results.get('seg_fields', []):
+            results[key] = self.crop(results[key], crop_bbox)
+
+        # crop nsct feature
+        results['nsct_feature'] = self.crop(results['nsct_feature'], crop_bbox)
+
+        return results
 
 
 @PIPELINES.register_module()
