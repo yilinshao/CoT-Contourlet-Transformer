@@ -408,10 +408,11 @@ class VisionTransformer(nn.Module):
         x = self.laplace_pyramid(x)
         pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
         x = pad_margin(x)
+        w_length = int(self.img_size / 16)
         freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dim).cuda()
         for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
             for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
-                freq_embed[:, num_i * 48 + num_j, 0: 32*32] = x[:, 0, i: i+32, j: j+32].flatten(1)
+                freq_embed[:, num_i * w_length + num_j, :] = x[:, 0, i: i+32, j: j+32].flatten(1)
         return freq_embed
 
     def _conv_filter(self, state_dict, patch_size=16):

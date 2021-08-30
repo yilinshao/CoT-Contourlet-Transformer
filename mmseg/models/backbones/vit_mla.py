@@ -13,7 +13,8 @@ from .helpers import load_pretrained
 from ..builder import BACKBONES
 
 from mmcv.cnn import build_norm_layer
-
+import torchvision
+import numpy as np
 
 def _cfg(url='', **kwargs):
     return {
@@ -403,7 +404,7 @@ class VIT_MLA(nn.Module):
 
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
-                 drop_path_rate=0., fuse_nsct=False, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
+                 drop_path_rate=0., hfpe=False, fuse_nsct=False, use_low_freq=False, low_freq_dim=1024, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
                  pos_embed_interp=False, random_init=False, align_corners=False, mla_channels=256,
                  mla_index=(5, 11, 17, 23), **kwargs):
         super(VIT_MLA, self).__init__(**kwargs)
@@ -430,6 +431,14 @@ class VIT_MLA(nn.Module):
         self.mla_channels = mla_channels
         self.mla_index = mla_index
         self.fuse_nsct = fuse_nsct
+        self.hfpe = hfpe
+        self.use_low_freq = use_low_freq
+        if self.use_low_freq:
+            low_freq_bn = build_norm_layer(norm_cfg, 1)[1]
+
+        if self.hfpe:
+            self.gaussian_filter = self.get_gaussian_filter()
+            self.hfpe_bn = build_norm_layer(norm_cfg, 1)[1]
 
         self.num_stages = self.depth
         self.out_indices = tuple(range(self.num_stages))
@@ -500,6 +509,44 @@ class VIT_MLA(nn.Module):
         else:
             print('Initialize weight randomly')
 
+    def get_gaussian_filter(self, K_size=3, sigma=1.3):
+        pad = K_size // 2
+        K = torch.zeros(K_size, K_size).float()
+        for x in range(-pad, -pad + K_size):
+            for y in range(-pad, -pad + K_size):
+                K[y + pad, x + pad] = np.exp(-(x ** 2 + y ** 2) / (2 * (sigma ** 2)))
+        K /= (2 * np.pi * sigma * sigma)
+        K /= K.sum()
+        return K.cuda()
+
+    def laplace_pyramid(self, x):
+        gray_image = torchvision.transforms.Grayscale()(x)
+        gau_filter = self.gaussian_filter.unsqueeze(0).unsqueeze(0)
+        low_pass = torch.nn.functional.conv2d(gray_image, gau_filter, stride=1, padding=1)
+        res_high_freq = gray_image - low_pass
+        # import matplotlib.pyplot as plt
+        # x_image_np = low_pass[1].squeeze(0).cpu().numpy()
+        # y_image_np = res_high_freq[1].squeeze(0).cpu().numpy()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(x_image_np, cmap='gray')
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(y_image_np, cmap='gray')
+        # plt.show()
+
+        res_high_freq = self.hfpe_bn(res_high_freq)
+        return res_high_freq
+
+    def high_freq_position_embedding(self, x):
+        x = self.laplace_pyramid(x)
+        pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
+        x = pad_margin(x)
+        w_length = int(self.img_size / 16)
+        freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dim).cuda()
+        for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
+            for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
+                freq_embed[:, num_i * w_length + num_j, :] = x[:, 0, i: i+32, j: j+32].flatten(1)
+        return freq_embed
+
     @property
     def no_weight_decay(self):
         return {'pos_embed', 'cls_token'}
@@ -515,15 +562,29 @@ class VIT_MLA(nn.Module):
 
     def forward(self, x, **kwargs):
         B = x.shape[0]
+
+        # high frequency positional embedding
+        if self.hfpe:
+            freq_embed = self.high_freq_position_embedding(x)
+
         x = self.patch_embed(x)
+        if self.use_low_freq:
+            assert kwargs['low_freq'] is not None
+            low_freq = kwargs['low_freq']
+
         x = x.flatten(2).transpose(1, 2)
 
         # stole cls_tokens impl from Phil Wang, thanks
         cls_tokens = self.cls_token.expand(B, -1, -1)
         x = torch.cat((cls_tokens, x), dim=1)
         x = x + self.pos_embed
+
         x = x[:, 1:]
+
         x = self.pos_drop(x)
+
+        if self.hfpe:
+            x = x + freq_embed
 
         outs = []
         for i, blk in enumerate(self.blocks):

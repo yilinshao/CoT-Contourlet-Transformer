@@ -35,11 +35,6 @@ class VIT_NSCT(nn.Module):
         self.resnet_backbone_2 = builder.build_backbone(resnet_backbone_2)
         self.resnet_backbone_3 = builder.build_backbone(resnet_backbone_3)
 
-        levels = [0, 1, 2]
-        pfilter = 'maxflat'
-        dfilter = 'dmaxflat7'
-        # self.nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
-
         self.sobel_x, self.sobel_y = self._init_sobel_filter()
         _, self.x2_syncbn = build_norm_layer(norm_cfg, 1024)
         _, self.nsct_syncbn = build_norm_layer(norm_cfg, 7)
@@ -115,6 +110,8 @@ class VIT_NSCT(nn.Module):
                          self.resnet_backbone_2(x2_2)[0],
                          self.resnet_backbone_3(x2_3)[0]]
 
-        tf_feature, nsct_1, nsct_2, nsct_3 = self.vit_backbone(x[:, 0: 3], nsct_features=nsct_features)
+        tf_feature, nsct_1, nsct_2, nsct_3 = self.vit_backbone(x[:, 0: 3],
+                                                               nsct_features=nsct_features,
+                                                               low_freq=x[:, 3: 4])
 
         return tf_feature, nsct_1, nsct_2, nsct_3
