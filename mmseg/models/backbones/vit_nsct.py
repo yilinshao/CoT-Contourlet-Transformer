@@ -11,6 +11,7 @@ from torch._six import container_abcs
 import warnings
 from .. import builder
 import time
+import torch.nn.functional as F
 
 import sys
 
@@ -28,14 +29,15 @@ from mmcv.cnn import build_norm_layer
 
 @BACKBONES.register_module
 class VIT_NSCT(nn.Module):
-    def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, resnet_backbone_3):
+    def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, resnet_backbone_3, ms_nsct=False):
         super(VIT_NSCT, self).__init__()
         self.vit_backbone = builder.build_backbone(vit_backbone)
         self.resnet_backbone_1 = builder.build_backbone(resnet_backbone_1)
         self.resnet_backbone_2 = builder.build_backbone(resnet_backbone_2)
         self.resnet_backbone_3 = builder.build_backbone(resnet_backbone_3)
 
-        self.sobel_x, self.sobel_y = self._init_sobel_filter()
+        self.ms_nsct = ms_nsct
+        # self.sobel_x, self.sobel_y = self._init_sobel_filter()
         _, self.x2_syncbn = build_norm_layer(norm_cfg, 1024)
         _, self.nsct_syncbn = build_norm_layer(norm_cfg, 7)
 
@@ -98,6 +100,7 @@ class VIT_NSCT(nn.Module):
         # x2 = self.nsct.dec_iter(x2)
 
         # shownsct(x2, gpu=True)
+        low_freq = x[:, 3: 4]
         x2 = x[:, 4:]
         x2 = self.nsct_syncbn(x2)
         # x2 = self.nsct_norm(x2)
@@ -106,12 +109,18 @@ class VIT_NSCT(nn.Module):
         x2_2 = x2[:, 1: 3]
         x2_3 = x2[:, 3: 7]
 
+        if self.ms_nsct:
+            x2_2 = F.interpolate(x2_2, x2_3.shape[-1] // 2, mode='bilinear', align_corners=True)
+            x2_1 = F.interpolate(x2_1, x2_3.shape[-1] // 4, mode='bilinear', align_corners=True)
+            low_freq = F.interpolate(low_freq, x2_3.shape[-1] // 8, mode='bilinear', align_corners=True)
+
+
         nsct_features = [self.resnet_backbone_1(x2_1)[0],
                          self.resnet_backbone_2(x2_2)[0],
                          self.resnet_backbone_3(x2_3)[0]]
 
         tf_feature, nsct_1, nsct_2, nsct_3 = self.vit_backbone(x[:, 0: 3],
                                                                nsct_features=nsct_features,
-                                                               low_freq=x[:, 3: 4])
+                                                               low_freq=low_freq)
 
         return tf_feature, nsct_1, nsct_2, nsct_3

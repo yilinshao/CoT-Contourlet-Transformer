@@ -231,7 +231,8 @@ class PatchEmbed(nn.Module):
         self.num_patches = num_patches
 
         self.proj = nn.Conv2d(in_chans, embed_dim,
-                              kernel_size=patch_size, stride=patch_size)
+                              kernel_size=16, stride=16)
+
 
     def forward(self, x):
         B, C, H, W = x.shape
@@ -241,6 +242,7 @@ class PatchEmbed(nn.Module):
 
         # x = F.interpolate(x, size=2*x.shape[-1], mode='bilinear', align_corners=True)
         x = self.proj(x)
+        x = F.interpolate(x, self.img_size[1] // self.patch_size[1], mode='bilinear', align_corners=True)
         return x
 
 
@@ -380,20 +382,25 @@ class NsctFusion(nn.Module):
     def forward(self, tf_feature, nsct_1, nsct_2, nsct_3):
 
         tf_feature = F.interpolate(self.to_2D(tf_feature), nsct_1.shape[-1], mode='bilinear', align_corners=True)
-
         tf_feature = self.tf_1x1(tf_feature)
         nsct_1_1x1 = self.nsct_1_1x1(nsct_1)
-        nsct_2_1x1 = self.nsct_2_1x1(nsct_2)
-        nsct_3_1x1 = self.nsct_3_1x1(nsct_3)
-
         nsct_1_plus = tf_feature + nsct_1_1x1
         nsct_1_plus = self.nsct_1(nsct_1_plus)
 
+        nsct_1_plus = F.interpolate(nsct_1_plus, nsct_2.shape[-1], mode='bilinear', align_corners=True)
+        nsct_2_1x1 = self.nsct_2_1x1(nsct_2)
         nsct_2_plus = nsct_1_plus + nsct_2_1x1
         nsct_2_plus = self.nsct_2(nsct_2_plus)
 
+        nsct_2_plus = F.interpolate(nsct_2_plus, nsct_3.shape[-1], mode='bilinear', align_corners=True)
+        nsct_3_1x1 = self.nsct_3_1x1(nsct_3)
         nsct_3_plus = nsct_2_plus + nsct_3_1x1
         nsct_3_plus = self.nsct_3(nsct_3_plus)
+
+        tf_feature = F.interpolate(tf_feature, nsct_3.shape[-1], mode='bilinear', align_corners=True)
+        nsct_1_plus = F.interpolate(nsct_1_plus, nsct_3.shape[-1], mode='bilinear', align_corners=True)
+        nsct_2_plus = F.interpolate(nsct_2_plus, nsct_3.shape[-1], mode='bilinear', align_corners=True)
+
         return tf_feature, nsct_1_plus, nsct_2_plus, nsct_3_plus
 
 
@@ -404,7 +411,7 @@ class VIT_MLA(nn.Module):
 
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
-                 drop_path_rate=0., hfpe=False, fuse_nsct=False, use_low_freq=False, low_freq_dim=1024, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
+                 drop_path_rate=0., hfpe=False, fuse_nsct=False, use_low_freq=False, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
                  pos_embed_interp=False, random_init=False, align_corners=False, mla_channels=256,
                  mla_index=(5, 11, 17, 23), **kwargs):
         super(VIT_MLA, self).__init__(**kwargs)
@@ -434,7 +441,10 @@ class VIT_MLA(nn.Module):
         self.hfpe = hfpe
         self.use_low_freq = use_low_freq
         if self.use_low_freq:
-            low_freq_bn = build_norm_layer(norm_cfg, 1)[1]
+            self.low_freq_bn = build_norm_layer(norm_cfg, 1)[1]
+            self.fuse_color = nn.Sequential(nn.Conv2d(self.embed_dim + 1, self.embed_dim, 1, padding=0, bias=False),
+                                            build_norm_layer(norm_cfg, self.embed_dim)[1],
+                                            nn.ReLU())
 
         if self.hfpe:
             self.gaussian_filter = self.get_gaussian_filter()
@@ -537,10 +547,12 @@ class VIT_MLA(nn.Module):
         return res_high_freq
 
     def high_freq_position_embedding(self, x):
+        resize_scale = self.patch_size // 16
+        x = F.interpolate(x, x.shape[-1] // resize_scale, mode='bilinear', align_corners=True)
         x = self.laplace_pyramid(x)
         pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
         x = pad_margin(x)
-        w_length = int(self.img_size / 16)
+        w_length = self.img_size // self.patch_size
         freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dim).cuda()
         for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
             for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
@@ -571,6 +583,10 @@ class VIT_MLA(nn.Module):
         if self.use_low_freq:
             assert kwargs['low_freq'] is not None
             low_freq = kwargs['low_freq']
+            low_freq = F.interpolate(low_freq, low_freq.shape[-1] // 4, mode='bilinear', align_corners=True)
+
+            low_freq = self.hfpe_bn(low_freq)
+            x = self.fuse_color(torch.cat((low_freq, x), dim=1))
 
         x = x.flatten(2).transpose(1, 2)
 
