@@ -11,11 +11,18 @@ import time
 
 
 class CityscapesImages(data.Dataset):
-    def __init__(self, root, list_path):
+    def __init__(self, root, list_path=None):
         self.root = root
-        self.list_path = list_path
+        self.img_list = []
+        city_dirs = os.listdir(root)
+        for city in city_dirs:
+            imgs_in_city = os.listdir(os.path.join(root, city))
+            imgs_in_city = [os.path.join(city, img_in_city) for img_in_city in imgs_in_city]
+            self.img_list.extend(imgs_in_city)
 
-        self.img_list = [line.strip().split()[0] for line in open(os.path.join(root, list_path))]
+        # self.list_path = list_path
+        #
+        # self.img_list = [line.strip().split()[0] for line in open(os.path.join(root, list_path))]
 
     def __len__(self):
         return len(self.img_list)
@@ -54,8 +61,8 @@ def main():
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
-    # dec_dataset = CityscapesImages('../../data/cityscapes', 'train.lst')
-    dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
+    dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/train')
+    # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
     dec_loader = torch.utils.data.DataLoader(
         dec_dataset,
         batch_size=1,

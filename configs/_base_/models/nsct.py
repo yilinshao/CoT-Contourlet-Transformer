@@ -2,8 +2,8 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
     pretrained=dict(
-            vit_pretrained='/document/detr/transfer/jx_vit_large_p16_384.pth',
-            resnet_pretrained='/document/detr/transfer/resnet50.pth'
+            vit_pretrained='transfer/jx_vit_large_p16_384.pth',
+            resnet_pretrained='transfer/resnet50.pth'
         ),
     backbone=dict(
         type='VIT_NSCT',
