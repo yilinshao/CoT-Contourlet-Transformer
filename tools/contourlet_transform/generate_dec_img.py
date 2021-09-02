@@ -53,16 +53,36 @@ class PascalContext(data.Dataset):
         return img.copy(), img_path
 
 
+class Ade(data.Dataset):
+    def __init__(self, root):
+        self.root = root
+        self.img_list = os.listdir(root)
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def __getitem__(self, index):
+        img = Image.open(os.path.join(self.root, self.img_list[index])).convert('L')
+        # img = Image.open('../../data/VOCdevkit/VOC2010/JPEGImages/2008_001823.jpg').convert('L')
+
+        # img = img.resize((512, 256))
+        img = np.array(img)
+        img_path = os.path.join(self.root, self.img_list[index])
+        return img.copy(), img_path
+
+
 def main():
     # get filters
-    levels = [0, 1, 2]
+    levels = [0, 1]
     pfilter = 'maxflat'
     dfilter = 'dmaxflat7'
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
-    dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/val')
+    # dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/val')
     # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
+    dec_dataset = Ade('../../data/ade/ADEChallengeData2016/images/validation')
+
     dec_loader = torch.utils.data.DataLoader(
         dec_dataset,
         batch_size=1,
