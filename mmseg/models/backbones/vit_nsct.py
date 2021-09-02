@@ -27,7 +27,7 @@ from ..builder import BACKBONES
 from mmcv.cnn import build_norm_layer
 
 
-@BACKBONES.register_module
+@BACKBONES.register_module()
 class VIT_NSCT(nn.Module):
     def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, resnet_backbone_3, ms_nsct=False):
         super(VIT_NSCT, self).__init__()

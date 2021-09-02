@@ -10,7 +10,7 @@ from mmcv.runner import OPTIMIZERS
 from torch.optim import Optimizer
 
 
-@OPTIMIZERS.register_module
+@OPTIMIZERS.register_module()
 class MyOptimizer(Optimizer):
 
     def __init__(self, a, b, c)
@@ -88,7 +88,7 @@ import torch.nn as nn
 from ..registry import BACKBONES
 
 
-@BACKBONES.register_module
+@BACKBONES.register_module()
 class MobileNet(nn.Module):
 
     def __init__(self, arg1, arg2):
@@ -196,7 +196,7 @@ def my_loss(pred, target):
     loss = torch.abs(pred - target)
     return loss
 
-@LOSSES.register_module
+@LOSSES.register_module()
 class MyLoss(nn.Module):
 
     def __init__(self, reduction='mean', loss_weight=1.0):

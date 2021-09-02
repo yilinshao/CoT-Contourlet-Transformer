@@ -19,7 +19,7 @@ from ..builder import BACKBONES
 from mmcv.cnn import build_norm_layer
 
 
-@BACKBONES.register_module
+@BACKBONES.register_module()
 class VIT_CNN(nn.Module):
     def __init__(self, norm_cfg, vit_backbone, resnet_backbone):
         super(VIT_CNN, self).__init__()

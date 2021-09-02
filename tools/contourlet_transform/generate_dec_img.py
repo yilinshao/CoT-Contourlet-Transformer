@@ -61,7 +61,7 @@ def main():
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
-    dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/train')
+    dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/val')
     # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
     dec_loader = torch.utils.data.DataLoader(
         dec_dataset,

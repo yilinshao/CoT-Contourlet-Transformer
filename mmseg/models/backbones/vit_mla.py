@@ -548,8 +548,8 @@ class VIT_MLA(nn.Module):
         return res_high_freq
 
     def high_freq_position_embedding(self, x):
-        resize_scale = self.patch_size // 16
-        x = F.interpolate(x, x.shape[-1] // resize_scale, mode='bilinear', align_corners=True)
+        down_sample_rate = self.patch_size // 16
+        x = F.interpolate(x, x.shape[-1] // down_sample_rate, mode='bilinear', align_corners=True)
         x = self.laplace_pyramid(x)
         pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
         x = pad_margin(x)

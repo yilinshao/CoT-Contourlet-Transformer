@@ -15,7 +15,7 @@ train_pipeline = [
     dict(type='Normalize', **img_norm_cfg),
     dict(type='PadWithNSCT', size=crop_size, pad_val=0, seg_pad_val=255),
     dict(type='DefaultFormatBundle'),
-    dict(type='Collect', keys=['img', 'gt_semantic_seg']),
+    dict(type='Collect', keys=['img', 'gt_semantic_seg', 'nsct_feature']),
 ]
 test_pipeline = [
     dict(type='LoadImageFromFile'),
@@ -36,14 +36,14 @@ test_pipeline = [
 dataset_type = 'CityscapesDatasetWithNSCT'
 data = dict(
     train=dict(type=dataset_type,
-               nsct_dir='nsct',
-               nsct_suffix='.npy',
+               nsct_dir='nsct/train',
+               nsct_suffix='_leftImg8bit.npy',
                pipeline=train_pipeline),
     val=dict(type=dataset_type,
-             nsct_dir='nsct',
-             nsct_suffix='.npy',
+             nsct_dir='nsct/train',
+             nsct_suffix='_leftImg8bit.npy',
              pipeline=test_pipeline),
     test=dict(type=dataset_type,
-              nsct_dir='nsct',
-              nsct_suffix='.npy',
+              nsct_dir='nsct/train',
+              nsct_suffix='_leftImg8bit.npy',
               pipeline=test_pipeline))
