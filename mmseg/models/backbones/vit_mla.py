@@ -241,8 +241,9 @@ class PatchEmbed(nn.Module):
             f"Input image size ({H}*{W}) doesn't match model ({self.img_size[0]}*{self.img_size[1]})."
 
         # x = F.interpolate(x, size=2*x.shape[-1], mode='bilinear', align_corners=True)
+        down_sample_rate = self.patch_size[1] // 16
+        x = F.interpolate(x, self.img_size[1] // down_sample_rate, mode='bilinear', align_corners=True)
         x = self.proj(x)
-        x = F.interpolate(x, self.img_size[1] // self.patch_size[1], mode='bilinear', align_corners=True)
         return x
 
 
