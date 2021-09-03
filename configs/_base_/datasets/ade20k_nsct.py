@@ -1,14 +1,14 @@
-_base_ = './cityscapes.py'
-
+# dataset settings
+dataset_type = 'ADE20KDatasetWithNSCT'
+data_root = 'data/ade/ADEChallengeData2016'
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
-crop_size = (768, 768)
+crop_size = (512, 512)
 train_pipeline = [
     dict(type='LoadImageFromFile'),
-    dict(type='LoadAnnotations'),
+    dict(type='LoadAnnotations', reduce_zero_label=True),
     dict(type='LoadNsctNpy'),
-
-    dict(type='ResizeWithNSCT', img_scale=(2049, 1025), ratio_range=(0.5, 2.0)),
+    dict(type='ResizeWithNSCT', img_scale=(2048, 512), ratio_range=(0.5, 2.0)),
     dict(type='RandomCropWithNSCT', crop_size=crop_size, cat_max_ratio=0.75),
     dict(type='RandomFlipWithNSCT', flip_ratio=0.5),
     dict(type='PhotoMetricDistortion'),
@@ -22,7 +22,7 @@ test_pipeline = [
     dict(type='LoadNsctNpy'),
     dict(
         type='MultiScaleFlipAug',
-        img_scale=(2049, 1025),
+        img_scale=(2048, 512),
         # img_ratios=[0.5, 0.75, 1.0, 1.25, 1.5, 1.75],
         flip=False,
         transforms=[
@@ -33,17 +33,30 @@ test_pipeline = [
             dict(type='Collect', keys=['img', 'nsct_feature']),
         ])
 ]
-dataset_type = 'CityscapesDatasetWithNSCT'
 data = dict(
-    train=dict(type=dataset_type,
-               nsct_dir='nsct/train',
-               nsct_suffix='_leftImg8bit.npy',
-               pipeline=train_pipeline),
-    val=dict(type=dataset_type,
-             nsct_dir='nsct/val',
-             nsct_suffix='_leftImg8bit.npy',
-             pipeline=test_pipeline),
-    test=dict(type=dataset_type,
-              nsct_dir='nsct/test',
-              nsct_suffix='_leftImg8bit.npy',
-              pipeline=test_pipeline))
+    samples_per_gpu=4,
+    workers_per_gpu=4,
+    train=dict(
+        type=dataset_type,
+        data_root=data_root,
+        img_dir='images/training',
+        ann_dir='annotations/training',
+        nsct_dir='nsct/training',
+        nsct_suffix='.npy',
+        pipeline=train_pipeline),
+    val=dict(
+        type=dataset_type,
+        data_root=data_root,
+        img_dir='images/validation',
+        ann_dir='annotations/validation',
+        nsct_dir='nsct/validation',
+        nsct_suffix='.npy',
+        pipeline=test_pipeline),
+    test=dict(
+        type=dataset_type,
+        data_root=data_root,
+        img_dir='images/validation',
+        ann_dir='annotations/validation',
+        nsct_dir='nsct/validation',
+        nsct_suffix='.npy',
+        pipeline=test_pipeline))

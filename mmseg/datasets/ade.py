@@ -7,6 +7,9 @@ from PIL import Image
 
 from .builder import DATASETS
 from .custom import CustomDataset
+from mmseg.utils import get_root_logger
+from mmcv.utils import print_log
+
 
 
 @DATASETS.register_module()
@@ -167,3 +170,119 @@ class ADE20KDataset(CustomDataset):
             tmp_dir = None
         result_files = self.results2img(results, imgfile_prefix, to_label_id)
         return result_files, tmp_dir
+
+
+@DATASETS.register_module()
+class ADE20KDatasetWithNSCT(ADE20KDataset):
+    def __init__(self, nsct_dir, nsct_suffix, **kwargs):
+        super(ADE20KDatasetWithNSCT, self).__init__(**kwargs)
+        self.use_nsct = True
+        self.nsct_dir = nsct_dir
+        self.nsct_suffix = nsct_suffix
+        self.img_dir = kwargs['img_dir']
+        self.ann_dir = kwargs['ann_dir']
+
+        if self.data_root is not None:
+            if not osp.isabs(self.img_dir):
+                self.img_dir = osp.join(self.data_root, self.img_dir)
+            if not (self.ann_dir is None or osp.isabs(self.ann_dir)):
+                self.ann_dir = osp.join(self.data_root, self.ann_dir)
+            if not (self.nsct_dir is None or osp.isabs(self.nsct_dir)):
+                self.nsct_dir = osp.join(self.data_root, self.nsct_dir)
+            if not (self.split is None or osp.isabs(self.split)):
+                self.split = osp.join(self.data_root, self.split)
+
+        self.img_infos = self.load_annotations_with_nsct(self.img_dir, self.img_suffix, self.ann_dir,
+                                                         self.seg_map_suffix,
+                                                         self.nsct_dir, self.nsct_suffix, self.split)
+
+    def load_annotations_with_nsct(self, img_dir, img_suffix, ann_dir, seg_map_suffix, nsct_dir, nsct_suffix,
+                                   split):
+        """Load annotation from directory.
+
+        Args:
+            img_dir (str): Path to image directory
+            img_suffix (str): Suffix of images.
+            ann_dir (str|None): Path to annotation directory.
+            seg_map_suffix (str|None): Suffix of segmentation maps.
+            split (str|None): Split txt file. If split is specified, only file
+                with suffix in the splits will be loaded. Otherwise, all images
+                in img_dir/ann_dir will be loaded. Default: None
+
+        Returns:
+            list[dict]: All image info of dataset.
+            :param nsct_suffix:
+            :param nsct_dir:
+        """
+
+        img_infos = []
+        if split is not None:
+            with open(split) as f:
+                for line in f:
+                    img_name = line.strip()
+                    img_info = dict(filename=img_name + img_suffix)
+                    if ann_dir is not None:
+                        seg_map = img_name + seg_map_suffix
+                        img_info['ann'] = dict(seg_map=seg_map)
+                    if nsct_dir is not None:
+                        nsct_feature = img_name + nsct_suffix
+                        img_info['nsct'] = dict(nsct_feature=nsct_feature)
+                    img_infos.append(img_info)
+        else:
+            for img in mmcv.scandir(img_dir, img_suffix, recursive=True):
+                img_info = dict(filename=img)
+                if ann_dir is not None:
+                    seg_map = img.replace(img_suffix, seg_map_suffix)
+                    img_info['ann'] = dict(seg_map=seg_map)
+                if nsct_dir is not None:
+                    nsct_feature = img.replace(img_suffix, nsct_suffix)
+                    img_info['nsct'] = dict(nsct_feature=nsct_feature)
+                img_infos.append(img_info)
+
+        print_log(f'Loaded {len(img_infos)} images', logger=get_root_logger())
+        return img_infos
+
+    def pre_pipeline(self, results):
+        """Prepare results dict for pipeline."""
+        results['seg_fields'] = []
+        results['img_prefix'] = self.img_dir
+        results['seg_prefix'] = self.ann_dir
+        results['nsct_prefix'] = self.nsct_dir
+        if self.custom_classes:
+            results['label_map'] = self.label_map
+
+    def prepare_train_img(self, idx):
+        """Get training data and annotations after pipeline.
+
+        Args:
+            idx (int): Index of data.
+
+        Returns:
+            dict: Training data and annotation after pipeline with new keys
+                introduced by pipeline.
+        """
+
+        img_info = self.img_infos[idx]
+        ann_info = self.get_ann_info(idx)
+        nsct_info = self.img_infos[idx]['nsct']
+        results = dict(img_info=img_info, ann_info=ann_info, nsct_info=nsct_info)
+
+        self.pre_pipeline(results)
+        return self.pipeline(results)
+
+    def prepare_test_img(self, idx):
+        """Get testing data after pipeline.
+
+        Args:
+            idx (int): Index of data.
+
+        Returns:
+            dict: Testing data after pipeline with new keys intorduced by
+                piepline.
+        """
+
+        img_info = self.img_infos[idx]
+        nsct_info = self.img_infos[idx]['nsct']
+        results = dict(img_info=img_info, nsct_info=nsct_info)
+        self.pre_pipeline(results)
+        return self.pipeline(results)
