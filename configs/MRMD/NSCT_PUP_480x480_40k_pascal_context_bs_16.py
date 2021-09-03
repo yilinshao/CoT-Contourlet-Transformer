@@ -1,15 +1,11 @@
 _base_ = [
     '../_base_/models/nsct.py',
     '../_base_/datasets/pascal_context_nsct.py', '../_base_/default_runtime.py',
-    '../_base_/schedules/schedule_80k.py'
+    '../_base_/schedules/schedule_40k.py'
 ]
 model = dict(
-    pretrained=dict(
-        vit_pretrained='transfer/SETR_MLA_pascal_context_b8_80k.pth',
-        resnet_pretrained='transfer/resnet50.pth'),
     backbone=dict(
-        ms_nsct=True,
-        vit_backbone=dict(hfpe=True, img_size=480, pos_embed_interp=True, drop_rate=0., patch_size=32,
+        vit_backbone=dict(img_size=480, pos_embed_interp=True, drop_rate=0.,
                           mla_channels=256, mla_index=(5, 11, 17, 23))),
     decode_head=dict(img_size=480, mla_channels=256,
                      mlahead_channels=128, num_classes=60),
@@ -67,5 +63,5 @@ crop_size = (480, 480)
 
 test_cfg = dict(mode='slide', crop_size=crop_size, stride=(320, 320))
 find_unused_parameters = True
-data = dict(samples_per_gpu=2)
+data = dict(samples_per_gpu=4)
 

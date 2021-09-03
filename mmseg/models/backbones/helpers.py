@@ -9,6 +9,7 @@ import sys
 import re
 import zipfile
 from urllib.parse import urlparse  # noqa: F401
+from collections import OrderedDict
 
 HASH_REGEX = re.compile(r'-([a-f0-9]*)\.')
 _logger = logging.getLogger(__name__)
@@ -58,9 +59,14 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
         _logger.warning(
             "Pretrained model URL is invalid, using random initialization.")
         return
-
+    new_state_dict = OrderedDict()
     if 'pretrained_finetune' in cfg and cfg['pretrained_finetune']:
-        state_dict = torch.load(cfg['pretrained_finetune'])
+        state_dict = torch.load(cfg['pretrained_finetune'])['state_dict']
+        for layer_name, layer_weight in state_dict.items():
+            if 'backbone' in layer_name and 'mla' not in layer_name:
+                new_state_dict[layer_name.replace('backbone.', '')] = layer_weight
+        state_dict = new_state_dict
+        strict = False
         print('load pre-trained weight from ' + cfg['pretrained_finetune'])
     else:
         state_dict = load_state_dict_from_url(
@@ -118,7 +124,7 @@ def load_pretrained(model, cfg=None, num_classes=1000, in_chans=3, filter_fn=Non
         state_dict[classifier_name + '.weight'] = classifier_weight[1:]
         classifier_bias = state_dict[classifier_name + '.bias']
         state_dict[classifier_name + '.bias'] = classifier_bias[1:]
-    elif num_classes != cfg['num_classes']:
+    elif num_classes != cfg['num_classes'] and 'pretrained_finetune' not in cfg:
         # completely discard fully connected for all other differences between pretrained and created model
         del state_dict[classifier_name + '.weight']
         del state_dict[classifier_name + '.bias']

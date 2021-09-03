@@ -4,6 +4,9 @@ _base_ = [
     '../_base_/schedules/schedule_80k.py'
 ]
 model = dict(
+    pretrained=dict(
+            vit_pretrained='transfer/SETR_Naive_cityscapes_b8_80k.pth',
+            resnet_pretrained='transfer/resnet50.pth'),
     backbone=dict(
         ms_nsct=True,
         vit_backbone=dict(hfpe=True, img_size=768, pos_embed_interp=True, drop_rate=0., patch_size=32,

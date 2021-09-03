@@ -511,6 +511,9 @@ class VIT_MLA(nn.Module):
         if not self.random_init:
             self.default_cfg = default_cfgs[self.model_name]
 
+            if pretrained is not None:
+                self.default_cfg['pretrained_finetune'] = pretrained
+
             if self.model_name in ['vit_small_patch16_224', 'vit_base_patch16_224']:
                 load_pretrained(self, num_classes=self.num_classes, in_chans=self.in_chans, pos_embed_interp=self.pos_embed_interp,
                                 num_patches=self.patch_embed.num_patches, align_corners=self.align_corners, filter_fn=self._conv_filter)
