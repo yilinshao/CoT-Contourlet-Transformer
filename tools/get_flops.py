@@ -23,10 +23,11 @@ def main():
 
     args = parse_args()
 
+    dim = 11 if 'NSCT' in args.config else 3
     if len(args.shape) == 1:
-        input_shape = (3, args.shape[0], args.shape[0])
+        input_shape = (dim, args.shape[0], args.shape[0])
     elif len(args.shape) == 2:
-        input_shape = (3, ) + tuple(args.shape)
+        input_shape = (dim, ) + tuple(args.shape)
     else:
         raise ValueError('invalid input shape')
 

@@ -66,8 +66,8 @@ def norm_features(y):
 def save_nsct(y, img_dir, gpu):
     # print(img_dir)
     # folder = os.path.dirname(img_dir).replace('/images', '/nsct_01')
-    # folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
-    folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
+    folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
+    # folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
 
     os.makedirs(folder, exist_ok=True)
 

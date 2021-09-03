@@ -56,22 +56,38 @@ class VIT_MLAHead(BaseDecodeHead):
     """
 
     def __init__(self, img_size=768, mla_channels=256, mlahead_channels=128,
-                 norm_layer=nn.BatchNorm2d, norm_cfg=None, **kwargs):
+                 norm_layer=nn.BatchNorm2d, norm_cfg=None, nsct_head=False, **kwargs):
         super(VIT_MLAHead, self).__init__(**kwargs)
         self.img_size = img_size
         self.norm_cfg = norm_cfg
         self.mla_channels = mla_channels
         self.BatchNorm = norm_layer
         self.mlahead_channels = mlahead_channels
+        self.nsct_head = nsct_head
 
-        self.mlahead = MLAHead(mla_channels=self.mla_channels,
-                               mlahead_channels=self.mlahead_channels, norm_cfg=self.norm_cfg)
-        self.cls = nn.Conv2d(4 * self.mlahead_channels,
-                             self.num_classes, 3, padding=1)
+        if nsct_head:
+            self.nscthead = nn.Sequential(nn.Conv2d(mla_channels, mlahead_channels, 3, padding=1, bias=False),
+                                          build_norm_layer(norm_cfg, mlahead_channels)[1],
+                                          nn.ReLU(),
+                                          nn.Conv2d(mlahead_channels, mlahead_channels, 3, padding=1, bias=False),
+                                          build_norm_layer(norm_cfg, mlahead_channels)[1],
+                                          nn.ReLU()
+                                          )
+            self.cls = nn.Conv2d(mlahead_channels, self.num_classes, 3, padding=1)
+
+        else:
+            self.mlahead = MLAHead(mla_channels=self.mla_channels,
+                                   mlahead_channels=self.mlahead_channels, norm_cfg=self.norm_cfg)
+            self.cls = nn.Conv2d(4 * self.mlahead_channels,
+                                 self.num_classes, 3, padding=1)
 
     def forward(self, inputs):
-        x = self.mlahead(inputs[0], inputs[1], inputs[2], inputs[3])
-        x = self.cls(x)
+        if self.nsct_head:
+            x = self.nscthead(inputs[-1])
+            x = self.cls(x)
+        else:
+            x = self.mlahead(inputs[0], inputs[1], inputs[2], inputs[3])
+            x = self.cls(x)
         x = F.interpolate(x, size=self.img_size, mode='bilinear',
                           align_corners=self.align_corners)
         return x
