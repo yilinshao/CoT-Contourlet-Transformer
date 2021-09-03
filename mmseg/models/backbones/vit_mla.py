@@ -405,6 +405,62 @@ class NsctFusion(nn.Module):
         return tf_feature, nsct_1_plus, nsct_2_plus, nsct_3_plus
 
 
+class NsctFusion01(nn.Module):
+    def __init__(self, in_channels=(1024, 1024, 512, 512), mla_channels=256, norm_cfg=None):
+        super(NsctFusion01, self).__init__()
+        self.tf_1x1_c18 = nn.Sequential(nn.Conv2d(
+            in_channels[0], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.tf_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[1], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.nsct_1_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[2], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+        self.nsct_2_1x1 = nn.Sequential(nn.Conv2d(
+            in_channels[3], mla_channels, 1, bias=False), build_norm_layer(norm_cfg, mla_channels)[1], nn.ReLU())
+
+        self.nsct_1 = nn.Sequential(nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU())
+        self.nsct_2 = nn.Sequential(nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU(),
+                                     nn.Conv2d(mla_channels, mla_channels, 3, padding=1, bias=False),
+                                     build_norm_layer(norm_cfg, mla_channels)[1],
+                                     nn.ReLU())
+
+    def to_2D(self, x):
+        n, hw, c = x.shape
+        h = w = int(math.sqrt(hw))
+        x = x.transpose(1, 2).reshape(n, c, h, w)
+        return x
+
+    def forward(self, tf_feature_c18, tf_feature_c24, nsct_1, nsct_2):
+
+        tf_feature_c18 = self.to_2D(tf_feature_c18).contiguous()
+        tf_feature_c18 = self.tf_1x1_c18(tf_feature_c18)
+
+        tf_feature = F.interpolate(self.to_2D(tf_feature_c24), nsct_1.shape[-1], mode='bilinear', align_corners=True)
+        tf_feature = self.tf_1x1(tf_feature)
+        nsct_1_1x1 = self.nsct_1_1x1(nsct_1)
+        nsct_1_plus = tf_feature + nsct_1_1x1
+        nsct_1_plus = self.nsct_1(nsct_1_plus)
+
+        nsct_1_plus = F.interpolate(nsct_1_plus, nsct_2.shape[-1], mode='bilinear', align_corners=True)
+        nsct_2_1x1 = self.nsct_2_1x1(nsct_2)
+        nsct_2_plus = nsct_1_plus + nsct_2_1x1
+        nsct_2_plus = self.nsct_2(nsct_2_plus)
+
+        return tf_feature_c18, tf_feature, nsct_1_plus, nsct_2_plus
+
+
 @BACKBONES.register_module()
 class VIT_MLA(nn.Module):
     """ Vision Transformer with support for patch or hybrid CNN input stage
@@ -412,7 +468,7 @@ class VIT_MLA(nn.Module):
 
     def __init__(self, model_name='vit_large_patch16_384', img_size=384, patch_size=16, in_chans=3, embed_dim=1024, depth=24,
                  num_heads=16, num_classes=19, mlp_ratio=4., qkv_bias=True, qk_scale=None, drop_rate=0.1, attn_drop_rate=0.,
-                 drop_path_rate=0., hfpe=False, fuse_nsct=False, use_low_freq=False, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
+                 drop_path_rate=0., hfpe=False, fuse_nsct=False, use_low_freq=False, nsct_levels=3, hybrid_backbone=None, norm_layer=partial(nn.LayerNorm, eps=1e-6), norm_cfg=None,
                  pos_embed_interp=False, random_init=False, align_corners=False, mla_channels=256,
                  mla_index=(5, 11, 17, 23), **kwargs):
         super(VIT_MLA, self).__init__(**kwargs)
@@ -441,6 +497,7 @@ class VIT_MLA(nn.Module):
         self.fuse_nsct = fuse_nsct
         self.hfpe = hfpe
         self.use_low_freq = use_low_freq
+        self.nsct_levels = nsct_levels
         if self.use_low_freq:
             self.low_freq_bn = build_norm_layer(norm_cfg, 1)[1]
             self.fuse_color = nn.Sequential(nn.Conv2d(self.embed_dim + 1, self.embed_dim, 1, padding=0, bias=False),
@@ -476,8 +533,15 @@ class VIT_MLA(nn.Module):
             for i in range(self.depth)])
 
         if self.fuse_nsct:
-            self.nsct_fusion = NsctFusion(in_channels=(self.embed_dim, 512, 512, 512), mla_channels=self.mla_channels,
-                                          norm_cfg=self.norm_cfg)
+            if self.nsct_levels == 3:
+                self.nsct_fusion = NsctFusion(in_channels=(self.embed_dim, 512, 512, 512), mla_channels=self.mla_channels,
+                                              norm_cfg=self.norm_cfg)
+            elif self.nsct_levels == 2:
+                self.nsct_fusion = NsctFusion01(in_channels=(self.embed_dim, self.embed_dim, 512, 512),
+                                              mla_channels=self.mla_channels,
+                                              norm_cfg=self.norm_cfg)
+            else:
+                raise ValueError('Unsupported NSCT level')
         else:
             self.mla = Conv_MLA(in_channels=self.embed_dim,
                                 mla_channels=self.mla_channels, norm_cfg=self.norm_cfg)
@@ -613,11 +677,23 @@ class VIT_MLA(nn.Module):
                 outs.append(x)
         if self.fuse_nsct:
             assert kwargs is not None
-            tf_feature = self.norm_3(outs[self.mla_index[3]])
-            tf_feature, nsct_1, nsct_2, nsct_3 = self.nsct_fusion(tf_feature, kwargs['nsct_features'][0],
-                                                                  kwargs['nsct_features'][1],
-                                                                  kwargs['nsct_features'][2])
-            return (tf_feature, nsct_1, nsct_2, nsct_3)
+
+            if self.nsct_levels == 3:
+                tf_feature_c24 = self.norm_3(outs[self.mla_index[3]])
+                tf_feature_c24, nsct_1, nsct_2, nsct_3 = self.nsct_fusion(tf_feature_c24, kwargs['nsct_features'][0],
+                                                                      kwargs['nsct_features'][1],
+                                                                      kwargs['nsct_features'][2])
+                return (tf_feature_c24, nsct_1, nsct_2, nsct_3)
+            else:
+                tf_feature_c18 = self.norm_2(outs[self.mla_index[2]])
+                tf_feature_c24 = self.norm_3(outs[self.mla_index[3]])
+
+                tf_feature_c18, tf_feature_c24, nsct_1, nsct_2 = self.nsct_fusion(tf_feature_c18,
+                                                                                  tf_feature_c24,
+                                                                                  kwargs['nsct_features'][0],
+                                                                                  kwargs['nsct_features'][1])
+                return (tf_feature_c18, tf_feature_c24, nsct_1, nsct_2)
+
 
 
         else:
