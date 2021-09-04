@@ -73,7 +73,7 @@ class Ade(data.Dataset):
 
 def main():
     # get filters
-    levels = [0, 1, 2]
+    levels = [0, 1]
     pfilter = 'maxflat'
     dfilter = 'dmaxflat7'
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
