@@ -1,13 +1,12 @@
 from torch.utils import data
 import torch
 import cv2
-from contourlet_dec import ContourletDec
 import os
 import numpy as np
 from PIL import Image
-from tools.shownsct import shownsct, save_nsct, load_nsct, torch_lst2np_lst, norm_features
 from tqdm import tqdm
 import time
+import skimage
 
 
 class CityscapesImages(data.Dataset):
@@ -52,6 +51,10 @@ class PascalContext(data.Dataset):
         img_path = os.path.join(self.root, self.img_list[index])
         return img.copy(), img_path
 
+def get_pascal_context_lst(root):
+    img_list = os.listdir(root)
+    return os.listdir(root)
+
 
 class Ade(data.Dataset):
     def __init__(self, root):
@@ -72,48 +75,27 @@ class Ade(data.Dataset):
 
 
 def main():
-    # get filters
-    levels = [0, 1, 2]
-    pfilter = 'maxflat'
-    dfilter = 'dmaxflat7'
-    nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
     # dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/test')
-    dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
+    # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
     # dec_dataset = Ade('../../data/ade/ADEChallengeData2016/images/validation')
 
-    dec_loader = torch.utils.data.DataLoader(
-        dec_dataset,
-        batch_size=1,
-        num_workers=2,
-        pin_memory=True
-    )
+    root = '../data/VOCdevkit/VOC2010/JPEGImages'
+    noise_mode = 's&p'
+    # noise_mode = 'gaussian'
+    img_lst = os.listdir(root)
+    for img_name in tqdm(img_lst, total=len(img_lst)):
+        img_dir = os.path.join(root, img_name)
+        img = Image.open(img_dir)
+        img = np.asarray(img)
+        noisy_img = (skimage.util.random_noise(img, mode=noise_mode, clip=True) * 255).astype(np.uint8)
+        img = Image.fromarray(noisy_img)
 
-    for i, batch in tqdm(enumerate(dec_loader), total=dec_dataset.__len__()):
-        # batch = Image.open('zoneplate.png')
-        # batch = [torch.from_numpy(np.array(batch)).unsqueeze(0), '/data']
-        if nsct.gpu:
-            img = batch[0].unsqueeze(0).float().cuda()
-            img_path = batch[1][0]
-        else:
-            img = batch[0].squeeze(0).numpy()
-            img_path = batch[1][0]
-
-        # start_time = time.time()
-        y = nsct.dec_iter(img)
-        # end_time = time.time()
-        # print("Time:%.2fs" % (end_time - start_time))
-
-        # shownsct(y, nsct.gpu)
-        save_nsct(y, img_path, nsct.gpu)
-        # break
-        # a = load_nsct(img_path)
-        # b = norm_features(y)
-        # b = torch_lst2np_lst(b)
-        # a = b
-
-
+        folder = os.path.dirname(img_dir).replace('/JPEGImages', '/JPEGImages_s&p')
+        os.makedirs(folder, exist_ok=True)
+        save_dir = os.path.join(folder, os.path.basename(img_dir))
+        img.save(save_dir)
 
 if __name__ == '__main__':
     main()
