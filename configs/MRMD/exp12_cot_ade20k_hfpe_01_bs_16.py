@@ -1,5 +1,5 @@
 _base_ = [
-    '../_base_/models/nsct.py',
+    '../_base_/models/nsct01.py',
     '../_base_/datasets/ade20k_nsct.py', '../_base_/default_runtime.py',
     '../_base_/schedules/schedule_160k.py'
 ]
@@ -8,8 +8,7 @@ model = dict(
         vit_pretrained=None,
         resnet_pretrained='transfer/resnet50.pth'),
     backbone=dict(
-        ms_nsct=True,
-        vit_backbone=dict(hfpe=True, img_size=512, pos_embed_interp=True, drop_rate=0., patch_size=32,
+        vit_backbone=dict(hfpe=True, img_size=512, pos_embed_interp=True, drop_rate=0.,
                           mla_channels=256, mla_index=(5, 11, 17, 23), num_classes=150)),
     decode_head=dict(img_size=512, mla_channels=256,
                      mlahead_channels=128, num_classes=150),
@@ -66,5 +65,13 @@ crop_size = (512, 512)
 test_cfg = dict(mode='slide', crop_size=crop_size, stride=(341, 341))
 find_unused_parameters = True
 
-data = dict(samples_per_gpu=4)
+data = dict(
+    samples_per_gpu=4,
+    train=dict(
+        nsct_dir='nsct_01/training'),
+    val=dict(
+        nsct_dir='nsct_01/validation'),
+    test=dict(
+        nsct_dir='nsct_01/validation')
+)
 
