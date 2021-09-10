@@ -44,6 +44,6 @@ data = dict(
              nsct_suffix='_leftImg8bit.npy',
              pipeline=test_pipeline),
     test=dict(type=dataset_type,
-              nsct_dir='nsct/test',
+              nsct_dir='nsct/val',
               nsct_suffix='_leftImg8bit.npy',
               pipeline=test_pipeline))
