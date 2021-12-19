@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# CoT
-=======
 # CoT: Contourlet Transformer
 
 ## Environment
@@ -118,4 +115,3 @@ mIoU
 --launcher
 pytorch
 ```
->>>>>>> master
