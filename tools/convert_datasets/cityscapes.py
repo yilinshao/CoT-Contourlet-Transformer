@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import argparse
 import os.path as osp
 
@@ -40,7 +41,7 @@ def main():
     else:
         mmcv.track_progress(convert_json_to_label, poly_files)
 
-    split_names = ['train', 'val', 'train_extra']
+    split_names = ['train', 'val', 'test']
 
     for split in split_names:
         filenames = []

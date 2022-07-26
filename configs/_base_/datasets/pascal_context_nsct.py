@@ -30,7 +30,7 @@ test_pipeline = [
         flip=False,
         transforms=[
             dict(type='ResizeWithNSCT', keep_ratio=True,
-                 crop_size=crop_size, setr_multi_scale=True),
+                 min_size=crop_size, setr_multi_scale=True),
             dict(type='RandomFlipWithNSCT'),
             dict(type='Normalize', **img_norm_cfg),
             dict(type='ImageToTensor', keys=['img', 'nsct_feature']),

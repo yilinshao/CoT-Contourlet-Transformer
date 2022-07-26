@@ -1,20 +1,23 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import torch.nn as nn
 import torch.nn.functional as F
-from mmcv.cnn import ConvModule, xavier_init
+from mmcv.cnn import ConvModule
+from mmcv.runner import BaseModule, auto_fp16
 
+from mmseg.ops import resize
 from ..builder import NECKS
 
 
 @NECKS.register_module()
-class FPN(nn.Module):
+class FPN(BaseModule):
     """Feature Pyramid Network.
 
-    This is an implementation of - Feature Pyramid Networks for Object
-    Detection (https://arxiv.org/abs/1612.03144)
+    This neck is the implementation of `Feature Pyramid Networks for Object
+    Detection <https://arxiv.org/abs/1612.03144>`_.
 
     Args:
-        in_channels (List[int]): Number of input channels per scale.
-        out_channels (int): Number of output channels (used at each scale)
+        in_channels (list[int]): Number of input channels per scale.
+        out_channels (int): Number of output channels (used at each scale).
         num_outs (int): Number of output scales.
         start_level (int): Index of the start input backbone level used to
             build the feature pyramid. Default: 0.
@@ -27,7 +30,7 @@ class FPN(nn.Module):
             Only the following options are allowed
 
             - 'on_input': Last feat map of neck inputs (i.e. backbone feature).
-            - 'on_lateral':  Last feature map after lateral convs.
+            - 'on_lateral': Last feature map after lateral convs.
             - 'on_output': The last output feature map after fpn convs.
         extra_convs_on_inputs (bool, deprecated): Whether to apply extra convs
             on the original feature from the backbone. If True,
@@ -39,10 +42,11 @@ class FPN(nn.Module):
             Default: False.
         conv_cfg (dict): Config dict for convolution layer. Default: None.
         norm_cfg (dict): Config dict for normalization layer. Default: None.
-        act_cfg (str): Config dict for activation layer in ConvModule.
+        act_cfg (dict): Config dict for activation layer in ConvModule.
             Default: None.
         upsample_cfg (dict): Config dict for interpolate layer.
-            Default: `dict(mode='nearest')`
+            Default: dict(mode='nearest').
+        init_cfg (dict or list[dict], optional): Initialization config dict.
 
     Example:
         >>> import torch
@@ -73,8 +77,10 @@ class FPN(nn.Module):
                  conv_cfg=None,
                  norm_cfg=None,
                  act_cfg=None,
-                 upsample_cfg=dict(mode='nearest')):
-        super(FPN, self).__init__()
+                 upsample_cfg=dict(mode='nearest'),
+                 init_cfg=dict(
+                     type='Xavier', layer='Conv2d', distribution='uniform')):
+        super(FPN, self).__init__(init_cfg)
         assert isinstance(in_channels, list)
         self.in_channels = in_channels
         self.out_channels = out_channels
@@ -153,12 +159,7 @@ class FPN(nn.Module):
                     inplace=False)
                 self.fpn_convs.append(extra_fpn_conv)
 
-    # default init_weights for conv(msra) and norm in ConvModule
-    def init_weights(self):
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                xavier_init(m, distribution='uniform')
-
+    @auto_fp16()
     def forward(self, inputs):
         assert len(inputs) == len(self.in_channels)
 
@@ -174,11 +175,11 @@ class FPN(nn.Module):
             # In some cases, fixing `scale factor` (e.g. 2) is preferred, but
             #  it cannot co-exist with `size` in `F.interpolate`.
             if 'scale_factor' in self.upsample_cfg:
-                laterals[i - 1] += F.interpolate(laterals[i],
-                                                 **self.upsample_cfg)
+                laterals[i - 1] = laterals[i - 1] + resize(
+                    laterals[i], **self.upsample_cfg)
             else:
                 prev_shape = laterals[i - 1].shape[2:]
-                laterals[i - 1] += F.interpolate(
+                laterals[i - 1] = laterals[i - 1] + resize(
                     laterals[i], size=prev_shape, **self.upsample_cfg)
 
         # build outputs

@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import argparse
 
 from mmcv import Config
@@ -7,7 +8,8 @@ from mmseg.models import build_segmentor
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description='Train a segmentor')
+    parser = argparse.ArgumentParser(
+        description='Get the FLOPs of a segmentor')
     parser.add_argument('config', help='train config file path')
     parser.add_argument(
         '--shape',
@@ -23,18 +25,19 @@ def main():
 
     args = parse_args()
 
-    dim = 11 if 'NSCT' in args.config else 3
     if len(args.shape) == 1:
-        input_shape = (dim, args.shape[0], args.shape[0])
+        input_shape = (3, args.shape[0], args.shape[0])
     elif len(args.shape) == 2:
-        input_shape = (dim, ) + tuple(args.shape)
+        input_shape = (3, ) + tuple(args.shape)
     else:
         raise ValueError('invalid input shape')
 
     cfg = Config.fromfile(args.config)
     cfg.model.pretrained = None
     model = build_segmentor(
-        cfg.model, train_cfg=cfg.train_cfg, test_cfg=cfg.test_cfg).cuda()
+        cfg.model,
+        train_cfg=cfg.get('train_cfg'),
+        test_cfg=cfg.get('test_cfg')).cuda()
     model.eval()
 
     if hasattr(model, 'forward_dummy'):

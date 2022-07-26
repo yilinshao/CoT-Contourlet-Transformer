@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -7,7 +8,6 @@ from mmseg.ops import resize
 from .. import builder
 from ..builder import SEGMENTORS
 from .base import BaseSegmentor
-import time
 
 
 @SEGMENTORS.register_module()
@@ -26,8 +26,13 @@ class EncoderDecoder(BaseSegmentor):
                  auxiliary_head=None,
                  train_cfg=None,
                  test_cfg=None,
-                 pretrained=None):
-        super(EncoderDecoder, self).__init__()
+                 pretrained=None,
+                 init_cfg=None):
+        super(EncoderDecoder, self).__init__(init_cfg)
+        if pretrained is not None:
+            assert backbone.get('pretrained') is None, \
+                'both backbone and segmentor set pretrained weight'
+            backbone.pretrained = pretrained
         self.backbone = builder.build_backbone(backbone)
         if neck is not None:
             self.neck = builder.build_neck(neck)
@@ -36,8 +41,6 @@ class EncoderDecoder(BaseSegmentor):
 
         self.train_cfg = train_cfg
         self.test_cfg = test_cfg
-
-        self.init_weights(pretrained=pretrained)
 
         assert self.with_decode_head
 
@@ -56,24 +59,6 @@ class EncoderDecoder(BaseSegmentor):
                     self.auxiliary_head.append(builder.build_head(head_cfg))
             else:
                 self.auxiliary_head = builder.build_head(auxiliary_head)
-
-    def init_weights(self, pretrained=None):
-        """Initialize the weights in backbone and heads.
-
-        Args:
-            pretrained (str, optional): Path to pre-trained weights.
-                Defaults to None.
-        """
-
-        super(EncoderDecoder, self).init_weights(pretrained)
-        self.backbone.init_weights(pretrained=pretrained)
-        self.decode_head.init_weights()
-        if self.with_auxiliary_head:
-            if isinstance(self.auxiliary_head, nn.ModuleList):
-                for aux_head in self.auxiliary_head:
-                    aux_head.init_weights()
-            else:
-                self.auxiliary_head.init_weights()
 
     def extract_feat(self, img):
         """Extract features from images."""
@@ -154,9 +139,9 @@ class EncoderDecoder(BaseSegmentor):
         x = self.extract_feat(img)
 
         losses = dict()
+
         loss_decode = self._decode_head_forward_train(x, img_metas,
                                                       gt_semantic_seg)
-
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:
@@ -204,6 +189,9 @@ class EncoderDecoder(BaseSegmentor):
                 count_mat.cpu().detach().numpy()).to(device=img.device)
         preds = preds / count_mat
         if rescale:
+            # remove padding area
+            resize_shape = img_meta[0]['img_shape'][:2]
+            preds = preds[:, :, :resize_shape[0], :resize_shape[1]]
             preds = resize(
                 preds,
                 size=img_meta[0]['ori_shape'][:2],
@@ -217,9 +205,17 @@ class EncoderDecoder(BaseSegmentor):
 
         seg_logit = self.encode_decode(img, img_meta)
         if rescale:
+            # support dynamic shape for onnx
+            if torch.onnx.is_in_onnx_export():
+                size = img.shape[2:]
+            else:
+                # remove padding area
+                resize_shape = img_meta[0]['img_shape'][:2]
+                seg_logit = seg_logit[:, :, :resize_shape[0], :resize_shape[1]]
+                size = img_meta[0]['ori_shape'][:2]
             seg_logit = resize(
                 seg_logit,
-                size=img_meta[0]['ori_shape'][:2],
+                size=size,
                 mode='bilinear',
                 align_corners=self.align_corners,
                 warning=False)
@@ -281,20 +277,13 @@ class EncoderDecoder(BaseSegmentor):
         """
         # aug_test rescale all imgs back to ori_shape for now
         assert rescale
-        output_seg_logit = False
         # to save memory, we get augmented seg logit inplace
         seg_logit = self.inference(imgs[0], img_metas[0], rescale)
         for i in range(1, len(imgs)):
             cur_seg_logit = self.inference(imgs[i], img_metas[i], rescale)
             seg_logit += cur_seg_logit
         seg_logit /= len(imgs)
-
-        # Modify here for ensemble learning to output the segmentation logit
-        if output_seg_logit:
-            seg_pred = seg_logit
-        else:
-            seg_pred = seg_logit.argmax(dim=1)
-
+        seg_pred = seg_logit.argmax(dim=1)
         seg_pred = seg_pred.cpu().numpy()
         # unravel batch dim
         seg_pred = list(seg_pred)
