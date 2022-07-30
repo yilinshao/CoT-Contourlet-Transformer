@@ -94,7 +94,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
             return self.aug_test(imgs, img_metas, **kwargs)
 
     @auto_fp16(apply_to=('img', ))
-    def forward(self, img, img_metas, return_loss=True, **kwargs):
+    def forward(self, img, img_metas, return_loss=True, nsct_feature=None, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
 
@@ -104,6 +104,12 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         should be double nested (i.e.  List[Tensor], List[List[dict]]), with
         the outer list indicating test time augmentations.
         """
+        if nsct_feature is not None:
+            if isinstance(nsct_feature, list):
+                for i in range(len(nsct_feature)):
+                    img[i] = torch.cat((img[i], nsct_feature[i]), dim=1)
+            else:
+                img = torch.cat((img, nsct_feature), dim=1)
         if return_loss:
             return self.forward_train(img, img_metas, **kwargs)
         else:

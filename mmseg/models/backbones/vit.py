@@ -5,6 +5,11 @@ import warnings
 import torch
 import torch.nn as nn
 import torch.utils.checkpoint as cp
+
+import torch.nn.functional as F
+import numpy as np
+import torchvision
+
 from mmcv.cnn import build_norm_layer
 from mmcv.cnn.bricks.transformer import FFN, MultiheadAttention
 from mmcv.cnn.utils.weight_init import (constant_init, kaiming_init,
@@ -13,6 +18,7 @@ from mmcv.runner import (BaseModule, CheckpointLoader, ModuleList,
                          load_state_dict)
 from torch.nn.modules.batchnorm import _BatchNorm
 from torch.nn.modules.utils import _pair as to_2tuple
+
 
 from mmseg.ops import resize
 from mmseg.utils import get_root_logger
@@ -197,7 +203,9 @@ class VisionTransformer(BaseModule):
                  norm_eval=False,
                  with_cp=False,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+
+                 hfpe=False):
         super(VisionTransformer, self).__init__(init_cfg=init_cfg)
 
         if isinstance(img_size, int):
@@ -228,6 +236,7 @@ class VisionTransformer(BaseModule):
         self.norm_eval = norm_eval
         self.with_cp = with_cp
         self.pretrained = pretrained
+        self.embed_dims = embed_dims
 
         self.patch_embed = PatchEmbed(
             in_channels=in_channels,
@@ -242,6 +251,7 @@ class VisionTransformer(BaseModule):
 
         num_patches = (img_size[0] // patch_size) * \
             (img_size[1] // patch_size)
+        self.num_patches = num_patches
 
         self.with_cls_token = with_cls_token
         self.output_cls_token = output_cls_token
@@ -285,6 +295,11 @@ class VisionTransformer(BaseModule):
             self.norm1_name, norm1 = build_norm_layer(
                 norm_cfg, embed_dims, postfix=1)
             self.add_module(self.norm1_name, norm1)
+
+        self.hfpe = hfpe
+        if self.hfpe:
+            self.gaussian_filter = self.get_gaussian_filter()
+            self.hfpe_bn = build_norm_layer(dict(type='SyncBN', requires_grad=True), 1)[1]
 
     @property
     def norm1(self):
@@ -367,6 +382,47 @@ class VisionTransformer(BaseModule):
                                               self.interpolate_mode)
         return self.drop_after_pos(patched_img + pos_embed)
 
+    def get_gaussian_filter(self, K_size=3, sigma=1.3):
+        pad = K_size // 2
+        K = torch.zeros(K_size, K_size).float()
+        for x in range(-pad, -pad + K_size):
+            for y in range(-pad, -pad + K_size):
+                K[y + pad, x + pad] = np.exp(-(x ** 2 + y ** 2) / (2 * (sigma ** 2)))
+        K /= (2 * np.pi * sigma * sigma)
+        K /= K.sum()
+        return K.cuda()
+
+    def laplace_pyramid(self, x):
+        gray_image = torchvision.transforms.Grayscale()(x)
+        gau_filter = self.gaussian_filter.unsqueeze(0).unsqueeze(0)
+        low_pass = torch.nn.functional.conv2d(gray_image, gau_filter, stride=1, padding=1)
+        res_high_freq = gray_image - low_pass
+        # import matplotlib.pyplot as plt
+        # x_image_np = low_pass[1].squeeze(0).cpu().numpy()
+        # y_image_np = res_high_freq[1].squeeze(0).cpu().numpy()
+        # plt.subplot(1, 2, 1)
+        # plt.imshow(x_image_np, cmap='gray')
+        # plt.subplot(1, 2, 2)
+        # plt.imshow(y_image_np, cmap='gray')
+        # plt.show()
+
+        res_high_freq = self.hfpe_bn(res_high_freq)
+        return res_high_freq
+
+    def high_freq_position_embedding(self, x):
+        down_sample_rate = self.patch_size // 16
+        x = F.interpolate(x, x.shape[-1] // down_sample_rate, mode='bilinear', align_corners=True)
+        x = self.laplace_pyramid(x)
+        pad_margin = torch.nn.ZeroPad2d(padding=(8, 8, 8, 8))
+        x = pad_margin(x)
+        #  TODO: consider img_size[0] != img_size[1]
+        w_length = self.img_size[0] // self.patch_size
+        freq_embed = torch.zeros(x.shape[0], self.num_patches, self.embed_dims).cuda()
+        for num_i, i in enumerate(range(0, x.shape[-1] - 16, 16)):
+            for num_j, j in enumerate(range(0, x.shape[-1] - 16, 16)):
+                freq_embed[:, num_i * w_length + num_j, :] = x[:, 0, i: i+32, j: j+32].flatten(1)
+        return freq_embed
+
     @staticmethod
     def resize_pos_embed(pos_embed, input_shpae, pos_shape, mode):
         """Resize pos_embed weights.
@@ -411,10 +467,16 @@ class VisionTransformer(BaseModule):
             # Remove class token for transformer encoder input
             x = x[:, 1:]
 
+        # high frequency positional embedding
+        if self.hfpe:
+            freq_embed = self.high_freq_position_embedding(inputs)
+            x = x + freq_embed
+
         outs = []
         for i, layer in enumerate(self.layers):
             x = layer(x)
             if i == len(self.layers) - 1:
+                # TODO: review
                 if self.final_norm:
                     x = self.norm1(x)
             if i in self.out_indices:

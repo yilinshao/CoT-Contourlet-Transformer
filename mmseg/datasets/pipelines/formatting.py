@@ -210,6 +210,10 @@ class DefaultFormatBundle(object):
                 to_tensor(results['gt_semantic_seg'][None,
                                                      ...].astype(np.int64)),
                 stack=True)
+        if 'nsct_feature' in results:
+            nsct_feature = results['nsct_feature']
+            nsct_feature = np.ascontiguousarray(nsct_feature.transpose(2, 0, 1))
+            results['nsct_feature'] = DC(to_tensor(nsct_feature), stack=True)
         return results
 
     def __repr__(self):
