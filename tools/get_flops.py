@@ -17,6 +17,11 @@ def parse_args():
         nargs='+',
         default=[2048, 1024],
         help='input image size')
+    parser.add_argument(
+        '--channels',
+        type=int,
+        default=3,
+        help='input image channels')
     args = parser.parse_args()
     return args
 
@@ -24,11 +29,12 @@ def parse_args():
 def main():
 
     args = parse_args()
+    input_channels = args.channels
 
     if len(args.shape) == 1:
-        input_shape = (3, args.shape[0], args.shape[0])
+        input_shape = (input_channels, args.shape[0], args.shape[0])
     elif len(args.shape) == 2:
-        input_shape = (3, ) + tuple(args.shape)
+        input_shape = (input_channels, ) + tuple(args.shape)
     else:
         raise ValueError('invalid input shape')
 

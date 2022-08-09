@@ -2,10 +2,7 @@ vit_backbone_norm_cfg = dict(type='LN', eps=1e-6, requires_grad=True)
 norm_cfg = dict(type='SyncBN', requires_grad=True)
 model = dict(
     type='EncoderDecoder',
-    pretrained=dict(
-            vit_pretrained='pretrain/vit_large_p16.pth',
-            resnet_pretrained='pretrain/resnet50.pth'
-        ),
+    pretrained=None,
     backbone=dict(
         type='ContourletTransformer',
         norm_cfg=norm_cfg,
@@ -23,6 +20,7 @@ model = dict(
             norm_cfg=vit_backbone_norm_cfg,
             with_cls_token=False,
             interpolate_mode='bilinear',
+            init_cfg=dict(type='Pretrained', checkpoint='pretrain/vit_large_p16.pth')
         ),
         resnet_backbone_1=dict(
             type='ResNet',
@@ -35,7 +33,8 @@ model = dict(
             norm_cfg=norm_cfg,
             norm_eval=False,
             style='pytorch',
-            contract_dilation=True
+            contract_dilation=True,
+            init_cfg=dict(type='Pretrained', checkpoint='pretrain/resnet50.pth')
         ),
         resnet_backbone_2=dict(
             type='ResNet',
@@ -48,7 +47,8 @@ model = dict(
             norm_cfg=norm_cfg,
             norm_eval=False,
             style='pytorch',
-            contract_dilation=True
+            contract_dilation=True,
+            init_cfg=dict(type='Pretrained', checkpoint='pretrain/resnet50.pth')
         )
     ),
     neck=dict(

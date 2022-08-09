@@ -1,28 +1,34 @@
-vit_backbone_norm_cfg = dict(type='LN', eps=1e-6, requires_grad=True)
+backbone_norm_cfg = dict(type='LN', requires_grad=True)
 norm_cfg = dict(type='SyncBN', requires_grad=True)
+checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_large_patch4_window7_224_22k_20220412-aeecf2aa.pth'  # noqa
+
 model = dict(
     type='EncoderDecoder',
-    pretrained=dict(
-            vit_pretrained='pretrain/vit_large_p16.pth',
-            resnet_pretrained='pretrain/resnet50.pth'
-        ),
+    pretrained=None,
     backbone=dict(
         type='ContourletTransformer',
         norm_cfg=norm_cfg,
         vit_backbone=dict(
-            type='VisionTransformer',
-            img_size=(768, 768),
-            patch_size=16,
-            in_channels=3,
-            embed_dims=1024,
-            num_layers=24,
-            num_heads=16,
-            out_indices=(5, 11, 17, 23),
-            drop_rate=0.1,
-            hfpe=True,
-            norm_cfg=vit_backbone_norm_cfg,
-            with_cls_token=False,
-            interpolate_mode='bilinear',
+            type='SwinTransformer',
+            pretrain_img_size=224,
+            embed_dims=192,
+            patch_size=4,
+            window_size=7,
+            mlp_ratio=4,
+            depths=[2, 2, 18, 2],
+            num_heads=[6, 12, 24, 48],
+            strides=(4, 2, 2, 2),
+            out_indices=(0, 1, 2, 3),
+            qkv_bias=True,
+            qk_scale=None,
+            patch_norm=True,
+            drop_rate=0.,
+            attn_drop_rate=0.,
+            drop_path_rate=0.3,
+            use_abs_pos_embed=False,
+            act_cfg=dict(type='GELU'),
+            norm_cfg=backbone_norm_cfg,
+            init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
         ),
         resnet_backbone_1=dict(
             type='ResNet',
@@ -35,7 +41,8 @@ model = dict(
             norm_cfg=norm_cfg,
             norm_eval=False,
             style='pytorch',
-            contract_dilation=True
+            contract_dilation=True,
+            init_cfg=dict(type='Pretrained', checkpoint='pretrain/resnet50.pth')
         ),
         resnet_backbone_2=dict(
             type='ResNet',
@@ -48,14 +55,15 @@ model = dict(
             norm_cfg=norm_cfg,
             norm_eval=False,
             style='pytorch',
-            contract_dilation=True
+            contract_dilation=True,
+            init_cfg=dict(type='Pretrained', checkpoint='pretrain/resnet50.pth')
         )
     ),
     neck=dict(
         type='CoTNeck',
         setr_mla_neck=dict(
             type='MLANeck',
-            in_channels=[1024, 1024, 1024, 1024],
+            in_channels=[192, 384, 768, 1536],
             out_channels=256,
             norm_cfg=norm_cfg,
             act_cfg=dict(type='ReLU'),

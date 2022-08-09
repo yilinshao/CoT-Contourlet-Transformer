@@ -1,6 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import torch.nn as nn
 from mmcv.cnn import ConvModule, build_norm_layer
+from mmseg.ops import resize
 
 from ..builder import NECKS
 
@@ -39,6 +40,18 @@ class MLAModule(nn.Module):
         feat_list = []
         for x, conv in zip(inputs, self.channel_proj):
             feat_list.append(conv(x))
+
+        # resize to 1/4 of the input size
+        _, _, h_0, w_0 = feat_list[0].shape
+        for i, x in enumerate(feat_list):
+            _, _, h, w = x.shape
+            assert h <= h_0
+            if h < h_0:
+                x_resize = resize(input=x,
+                           size=(h_0, w_0),
+                           mode='bilinear',
+                           align_corners=False)
+                feat_list[i] = x_resize
 
         # feat_list -> [p5, p4, p3, p2]
         # mid_list -> [m5, m4, m3, m2]

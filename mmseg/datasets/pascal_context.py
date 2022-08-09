@@ -1,7 +1,14 @@
 # Copyright (c) OpenMMLab. All rights reserved.
+import os.path as osp
 
+import mmcv
 from .builder import DATASETS
 from .custom import CustomDataset
+
+from mmcv.utils import print_log
+from mmseg.utils import get_root_logger
+
+import random
 
 
 @DATASETS.register_module()
@@ -104,15 +111,18 @@ class PascalContextDataset59(CustomDataset):
 
 @DATASETS.register_module()
 class PascalContextDatasetWithNSCT(PascalContextDataset):
-    def __init__(self, nsct_dir, nsct_suffix, **kwargs):
+    def __init__(self, nsct_dir, nsct_suffix, sample_ratio=1, **kwargs):
         super(PascalContextDatasetWithNSCT, self).__init__(**kwargs)
-        self.use_nsct = True
         self.nsct_dir = nsct_dir
         self.nsct_suffix = nsct_suffix
         self.img_dir = kwargs['img_dir']
         self.ann_dir = kwargs['ann_dir']
-        self.img_infos = self.load_annotations_with_nsct(self.img_dir, self.img_suffix, self.ann_dir, self.seg_map_suffix,
-                                               self.nsct_dir, self.nsct_suffix, self.split)
+        assert 0 < sample_ratio <= 1
+        self.sample_ratio = sample_ratio
+
+        self.img_infos = self.load_annotations_with_nsct(self.img_dir, self.img_suffix, self.ann_dir,
+                                                         self.seg_map_suffix,
+                                                         self.nsct_dir, self.nsct_suffix, self.split)
         if self.data_root is not None:
             if not osp.isabs(self.img_dir):
                 self.img_dir = osp.join(self.data_root, self.img_dir)
@@ -124,7 +134,7 @@ class PascalContextDatasetWithNSCT(PascalContextDataset):
                 self.split = osp.join(self.data_root, self.split)
 
     def load_annotations_with_nsct(self, img_dir, img_suffix, ann_dir, seg_map_suffix, nsct_dir, nsct_suffix,
-                         split):
+                                   split):
         """Load annotation from directory.
 
         Args:
@@ -165,6 +175,12 @@ class PascalContextDatasetWithNSCT(PascalContextDataset):
                     nsct_feature = img.replace(img_suffix, nsct_suffix)
                     img_info['nsct'] = dict(nsct_feature=nsct_feature)
                 img_infos.append(img_info)
+
+        #  randomly select images from the whole dataset
+        if self.sample_ratio < 1:
+            sample_num = int(len(img_infos) * self.sample_ratio)
+            random.seed(10)
+            img_infos = random.sample(img_infos, sample_num)
 
         print_log(f'Loaded {len(img_infos)} images', logger=get_root_logger())
         return img_infos

@@ -48,13 +48,13 @@ class NsctFusion01(nn.Module):
 
         tf_feature_c18 = self.tf_1x1_c18(tf_feature_c18)
 
-        tf_feature = F.interpolate(tf_feature_c24, nsct_1.shape[-1], mode='bilinear', align_corners=True)
+        tf_feature = F.interpolate(tf_feature_c24, nsct_1.shape[-2:], mode='bilinear', align_corners=True)
         tf_feature = self.tf_1x1(tf_feature)
         nsct_1_1x1 = self.nsct_1_1x1(nsct_1)
         nsct_1_plus = tf_feature + nsct_1_1x1
         nsct_1_plus = self.nsct_1(nsct_1_plus)
 
-        nsct_1_plus = F.interpolate(nsct_1_plus, nsct_2.shape[-1], mode='bilinear', align_corners=True)
+        nsct_1_plus = F.interpolate(nsct_1_plus, nsct_2.shape[-2:], mode='bilinear', align_corners=True)
         nsct_2_1x1 = self.nsct_2_1x1(nsct_2)
         nsct_2_plus = nsct_1_plus + nsct_2_1x1
         nsct_2_plus = self.nsct_2(nsct_2_plus)

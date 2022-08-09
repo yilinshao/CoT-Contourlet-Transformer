@@ -130,11 +130,8 @@ class ContourletTransformer_l3(nn.Module):
 
 @BACKBONES.register_module()
 class ContourletTransformer(nn.Module):
-    def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, pretrained, ms_nsct=False):
+    def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, ms_nsct=False):
         super(ContourletTransformer, self).__init__()
-
-        self.pretrained = pretrained
-        vit_backbone.pretrained = self.pretrained['vit_pretrained']
 
         self.vit_backbone = builder.build_backbone(vit_backbone)
         self.resnet_backbone_1 = builder.build_backbone(resnet_backbone_1)
@@ -145,18 +142,13 @@ class ContourletTransformer(nn.Module):
         _, self.x2_syncbn = build_norm_layer(norm_cfg, 1024)
         _, self.nsct_syncbn = build_norm_layer(norm_cfg, 3)
 
-        self.init_weights(pretrained=pretrained)
-
-    def init_weights(self, pretrained=None):
+    def init_weights(self):
         # if not isinstance(pretrained, dict):
         #     ValueError('Need two pre trained address')
-        if pretrained is None:
-            pretrained = {'vit_pretrained': None,
-                          'resnet_pretrained': None}
         # self.vit_backbone.init_weights(pretrained['vit_pretrained'])
         self.vit_backbone.init_weights()
-        self.resnet_backbone_1.init_weights(pretrained['resnet_pretrained'])
-        self.resnet_backbone_2.init_weights(pretrained['resnet_pretrained'])
+        self.resnet_backbone_1.init_weights()
+        self.resnet_backbone_2.init_weights()
 
     def forward(self, x):
 

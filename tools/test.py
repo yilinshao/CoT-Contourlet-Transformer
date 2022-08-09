@@ -180,7 +180,7 @@ def main():
                             osp.splitext(osp.basename(args.config))[0])
         mmcv.mkdir_or_exist(osp.abspath(work_dir))
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        if args.aug_test:
+        if args.aug_test or 'ms' in args.config:
             json_file = osp.join(work_dir,
                                  f'eval_multi_scale_{timestamp}.json')
         else:
