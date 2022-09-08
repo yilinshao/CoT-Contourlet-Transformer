@@ -76,7 +76,7 @@ def save_nsct(y, img_dir, gpu):
     if gpu:
         y = torch_lst2np_lst(y)
         y = np_lst2np_stack(y)
-    np.save(save_dir, y)
+    # np.save(save_dir, y)
 
 
 def load_nsct(img_dir):
