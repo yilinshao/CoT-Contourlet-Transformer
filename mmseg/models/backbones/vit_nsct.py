@@ -7,7 +7,7 @@ from itertools import repeat
 import matplotlib.pyplot as plt
 
 import torchvision.transforms
-from torch._six import container_abcs
+import collections.abc as container_abcs
 import warnings
 from .. import builder
 import time

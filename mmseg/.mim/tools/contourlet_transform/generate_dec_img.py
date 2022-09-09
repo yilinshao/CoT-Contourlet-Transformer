@@ -73,14 +73,14 @@ class Ade(data.Dataset):
 
 def main():
     # get filters
-    levels = [0, 1, 2]
+    levels = [0, 1]
     pfilter = 'maxflat'
     dfilter = 'dmaxflat7'
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
     # get dataloader
-    # dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/test')
-    dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
+    dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/val')
+    # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/JPEGImages')
     # dec_dataset = Ade('../../data/ade/ADEChallengeData2016/images/validation')
 
     dec_loader = torch.utils.data.DataLoader(

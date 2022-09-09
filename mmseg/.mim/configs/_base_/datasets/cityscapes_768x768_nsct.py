@@ -1,4 +1,5 @@
 _base_ = './cityscapes.py'
+dataset_type = 'CityscapesDatasetWithNSCT'
 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -10,7 +11,7 @@ train_pipeline = [
 
     dict(type='ResizeWithNSCT', img_scale=(2049, 1025), ratio_range=(0.5, 2.0)),
     dict(type='RandomCropWithNSCT', crop_size=crop_size, cat_max_ratio=0.75),
-    dict(type='RandomFlipWithNSCT', flip_ratio=0.5),
+    dict(type='RandomFlipWithNSCT', prob=0.5),
     dict(type='PhotoMetricDistortion'),
     dict(type='Normalize', **img_norm_cfg),
     dict(type='PadWithNSCT', size=crop_size, pad_val=0, seg_pad_val=255),
@@ -33,7 +34,7 @@ test_pipeline = [
             dict(type='Collect', keys=['img', 'nsct_feature']),
         ])
 ]
-dataset_type = 'CityscapesDatasetWithNSCT'
+
 data = dict(
     train=dict(type=dataset_type,
                nsct_dir='nsct/train',

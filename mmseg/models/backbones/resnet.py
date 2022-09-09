@@ -529,16 +529,16 @@ class ResNet(BaseModule):
         self.feat_dim = self.block.expansion * base_channels * 2**(
             len(self.stage_blocks) - 1)
 
-    # def init_weights(self, pretrained=None):
-    #     """Initialize the weights in backbone.
-    #
-    #     Args:
-    #         pretrained (str, optional): Path to pre-trained weights.
-    #             Defaults to None.
-    #     """
-    #     if isinstance(pretrained, str):
-    #         logger = get_root_logger()
-    #         load_checkpoint(self, pretrained, strict=False, logger=logger)
+    def init_weights(self, pretrained=None):
+        """Initialize the weights in backbone.
+
+        Args:
+            pretrained (str, optional): Path to pre-trained weights.
+                Defaults to None.
+        """
+        if isinstance(pretrained, str):
+            logger = get_root_logger()
+            load_checkpoint(self, pretrained, strict=False, logger=logger)
 
     def make_stage_plugins(self, plugins, stage_idx):
         """make plugins for ResNet 'stage_idx'th stage .
