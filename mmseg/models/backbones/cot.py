@@ -168,4 +168,4 @@ class ContourletTransformer(nn.Module):
 
         vit_outs = self.vit_backbone(x[:, 0: 3])
 
-        return vit_outs, hf_features  # return a tuple
+        return vit_outs, hf_features  # return a tuple input=480, vit_outs=120,60,30,15, hf_features=120,120

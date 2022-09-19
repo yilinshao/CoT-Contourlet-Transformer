@@ -24,11 +24,12 @@ from .vit_nsct import VIT_NSCT
 from .vit_mla import VIT_MLA
 from .vit_nsct import VIT_NSCT_01
 from .cot import ContourletTransformer
+from .sparse_resnet import SpResNet
 
 __all__ = [
     'ResNet', 'ResNetV1c', 'ResNetV1d', 'ResNeXt', 'HRNet', 'FastSCNN',
     'ResNeSt', 'MobileNetV2', 'UNet', 'CGNet', 'MobileNetV3',
     'VisionTransformer', 'SwinTransformer', 'MixVisionTransformer',
     'BiSeNetV1', 'BiSeNetV2', 'ICNet', 'TIMMBackbone', 'ERFNet', 'PCPVT',
-    'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE'
+    'SVT', 'STDCNet', 'STDCContextPathNet', 'BEiT', 'MAE', 'SpResNet',
 ]

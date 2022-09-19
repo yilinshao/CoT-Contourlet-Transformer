@@ -60,14 +60,18 @@ def norm_features(y):
     else:
         y_mean, y_std = y.mean(), y.std()
         y = (y - y_mean) / y_std
+
+        y_max, y_min = y.max(), y.min()
+        y = (y - y_min)/(y_max - y_min)
+
         return y
 
 
 def save_nsct(y, img_dir, gpu):
     # print(img_dir)
     # folder = os.path.dirname(img_dir).replace('/images', '/nsct_01')
-    # folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct')
-    folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
+    folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
+    # folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
 
     os.makedirs(folder, exist_ok=True)
 
@@ -76,6 +80,7 @@ def save_nsct(y, img_dir, gpu):
     if gpu:
         y = torch_lst2np_lst(y)
         y = np_lst2np_stack(y)
+
     # np.save(save_dir, y)
 
 
