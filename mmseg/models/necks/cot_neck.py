@@ -102,5 +102,6 @@ class CoTNeck(nn.Module):
                                                                           inputs[1][0],
                                                                           inputs[1][1])
 
-        return (tf_feature_c18, tf_feature_c24, nsct_1, nsct_2)
+        return {'outputs': (tf_feature_c18, tf_feature_c24, nsct_1, nsct_2),
+                'infos': inputs[-1]}
 

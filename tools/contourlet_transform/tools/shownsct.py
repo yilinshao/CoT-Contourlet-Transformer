@@ -64,13 +64,16 @@ def norm_features(y):
         y_max, y_min = y.max(), y.min()
         y = (y - y_min)/(y_max - y_min)
 
+        if y.max() != 1:
+            print(y)
+
         return y
 
 
 def save_nsct(y, img_dir, gpu):
     # print(img_dir)
-    # folder = os.path.dirname(img_dir).replace('/images', '/nsct_01')
-    folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
+    folder = os.path.dirname(img_dir).replace('/images', '/nsct_01')
+    # folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
     # folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
 
     os.makedirs(folder, exist_ok=True)

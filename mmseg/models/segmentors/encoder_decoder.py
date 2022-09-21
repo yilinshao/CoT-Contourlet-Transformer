@@ -70,7 +70,14 @@ class EncoderDecoder(BaseSegmentor):
     def encode_decode(self, img, img_metas):
         """Encode images with backbone and decode into a semantic segmentation
         map of the same size as input."""
-        x = self.extract_feat(img)
+        try:
+            x = self.extract_feat(img)
+        except RuntimeError:
+
+            print(img_metas)
+
+        if isinstance(x, dict) and 'infos' in x:
+            x = x['outputs']
         out = self._decode_head_forward_test(x, img_metas)
         out = resize(
             input=out,
@@ -138,6 +145,11 @@ class EncoderDecoder(BaseSegmentor):
 
         x = self.extract_feat(img)
 
+        infos = None
+        if isinstance(x, dict) and 'infos' in x:
+            infos = x['infos']
+            x = x['outputs']
+
         losses = dict()
 
         loss_decode = self._decode_head_forward_train(x, img_metas,
@@ -148,6 +160,9 @@ class EncoderDecoder(BaseSegmentor):
             loss_aux = self._auxiliary_head_forward_train(
                 x, img_metas, gt_semantic_seg)
             losses.update(loss_aux)
+
+        if infos is not None:
+            losses.update({'infos': infos})
 
         return losses
 

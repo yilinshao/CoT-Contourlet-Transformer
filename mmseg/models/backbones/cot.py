@@ -130,12 +130,15 @@ class ContourletTransformer_l3(nn.Module):
 
 @BACKBONES.register_module()
 class ContourletTransformer(nn.Module):
-    def __init__(self, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, ms_nsct=False):
+    def __init__(self, sparse_resnet, norm_cfg, vit_backbone, resnet_backbone_1, resnet_backbone_2, ms_nsct=False):
         super(ContourletTransformer, self).__init__()
 
         self.vit_backbone = builder.build_backbone(vit_backbone)
         self.resnet_backbone_1 = builder.build_backbone(resnet_backbone_1)
         self.resnet_backbone_2 = builder.build_backbone(resnet_backbone_2)
+
+        self.sparse_resnet = sparse_resnet
+        self.scale_factor = nn.Parameter(torch.ones(1)) if sparse_resnet else torch.ones(1)
 
         self.ms_nsct = ms_nsct
         # self.sobel_x, self.sobel_y = self._init_sobel_filter()
@@ -154,8 +157,19 @@ class ContourletTransformer(nn.Module):
 
         x1_low = x[:, 3: 4]
         x_dirs = x[:, 4:]
-        x_dirs = self.nsct_syncbn(x_dirs)
+        # x_dirs = self.nsct_syncbn(x_dirs)
         # x2 = self.nsct_norm(x2)
+
+        if self.scale_factor.data[0] < 0.7:
+            print('*' * 30)
+            print('*' * 30)
+            print('scale_factor has bounced to 0.7')
+            print('*' * 30)
+            print('*' * 30)
+
+            self.scale_factor.data[0] = 0.7
+
+        x_dirs = x_dirs * self.scale_factor
 
         x1_dirs = x_dirs[:, 0: 1]
         x2_dirs = x_dirs[:, 1: 3]
@@ -164,8 +178,16 @@ class ContourletTransformer(nn.Module):
             x1_dirs = F.interpolate(x1_dirs, x2_dirs.shape[-1] // 2, mode='bilinear', align_corners=True)
             x1_low = F.interpolate(x1_low, x2_dirs.shape[-1] // 4, mode='bilinear', align_corners=True)
 
-        hf_features = (self.resnet_backbone_1(x1_dirs)[0], self.resnet_backbone_2(x2_dirs)[0])  # high frequency features
+        resnet_out_1 = self.resnet_backbone_1(x1_dirs)
+        resnet_out_2 = self.resnet_backbone_2(x2_dirs)
+
+        info = None
+
+        hf_features = (resnet_out_1[0], resnet_out_2[0])  # high frequency features
 
         vit_outs = self.vit_backbone(x[:, 0: 3])
 
-        return vit_outs, hf_features  # return a tuple input=480, vit_outs=120,60,30,15, hf_features=120,120
+        if self.sparse_resnet:
+            info = [self.scale_factor.data[0].clone(), ]
+
+        return vit_outs, hf_features, info  # return a tuple input=480, vit_outs=120,60,30,15, hf_features=120,120

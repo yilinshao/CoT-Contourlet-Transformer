@@ -506,8 +506,6 @@ class SpResNet(BaseModule):
         self.stage_blocks = stage_blocks[:num_stages]
         self.inplanes = stem_channels
 
-        self.scale_factor = nn.Parameter(torch.ones(1))
-
         self._make_stem_layer(in_channels, stem_channels)
 
         self.res_layers = []
@@ -549,6 +547,21 @@ class SpResNet(BaseModule):
 
         self.feat_dim = self.block.expansion * base_channels * 2**(
             len(self.stage_blocks) - 1)
+
+        self.output_ds_rate = self._get_output_ds_rate()
+        self.output_channels = [256, 512, 1024, 2048]
+        assert len(self.output_ds_rate) == num_stages
+
+    def _get_output_ds_rate(self):
+        """
+        Get the downsample rate of each output tensor
+        :return: tuple
+        """
+        downsample_rate = []
+        base_rate = 4
+        for stride in self.strides:
+            downsample_rate.append(base_rate * stride)
+        return tuple(downsample_rate)
 
     def init_weights(self, pretrained=None):
         """Initialize the weights in backbone.
@@ -679,15 +692,18 @@ class SpResNet(BaseModule):
         """Forward function."""
 
         th = 0.7
-        if self.scale_factor < 0.7:
-            print('*' * 30)
-            print('*' * 30)
-            print('scale_factor has bounced to 0.7')
-            print('*' * 30)
-            print('*' * 30)
 
-            self.scale_factor = 0.7
-        x = x * self.scale_factor
+        if x.max() < th:
+            outs = []
+            x_n, x_c, x_h, x_w = x.shape
+            for i in range(len(self.res_layers)):
+                if i in self.out_indices:
+                    x_w_out = int(x_w / self.output_ds_rate[i])
+                    x_h_out = int(x_h / self.output_ds_rate[i])
+                    x_out = torch.zeros(x_n, self.output_channels[i], x_h_out, x_w_out).cuda()
+                    outs.append(x_out)
+
+            return tuple(outs)
         x = to_sparse(x, th)
         x = self.input_stem(x)
 

@@ -49,6 +49,7 @@ class Net(nn.Module):
 
     def forward(self, x: torch.Tensor):
         # x: [N, 28, 28, 1], must be NHWC tensor
+        x = x * 0
         x_sp = spconv.SparseConvTensor.from_dense(x.reshape(-1, 28, 28, 1))
         # create SparseConvTensor manually: see SparseConvTensor.from_dense
         x = self.net(x_sp)
