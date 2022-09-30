@@ -11,7 +11,7 @@ from .base import BaseSegmentor
 
 
 @SEGMENTORS.register_module()
-class EncoderDecoder(BaseSegmentor):
+class EncoderDecoderWithGT(BaseSegmentor):
     """Encoder Decoder segmentors.
 
     EncoderDecoder typically consists of backbone, decode_head, auxiliary_head.
@@ -28,7 +28,7 @@ class EncoderDecoder(BaseSegmentor):
                  test_cfg=None,
                  pretrained=None,
                  init_cfg=None):
-        super(EncoderDecoder, self).__init__(init_cfg)
+        super(EncoderDecoderWithGT, self).__init__(init_cfg)
         if pretrained is not None:
             assert backbone.get('pretrained') is None, \
                 'both backbone and segmentor set pretrained weight'
@@ -60,11 +60,16 @@ class EncoderDecoder(BaseSegmentor):
             else:
                 self.auxiliary_head = builder.build_head(auxiliary_head)
 
-    def extract_feat(self, img):
+    def extract_feat(self, img, gt=None):
         """Extract features from images."""
-        x = self.backbone(img)
+        if self.training:
+            assert gt is not None
+        x = self.backbone(img[:, :3])
         if self.with_neck:
-            x = self.neck(x)
+            if gt is not None:
+                x = self.neck(x, img, gt)
+            else:
+                x = self.neck(x, img)
         return x
 
     def encode_decode(self, img, img_metas):
@@ -73,8 +78,6 @@ class EncoderDecoder(BaseSegmentor):
 
         x = self.extract_feat(img)
 
-        if isinstance(x, dict) and 'infos' in x:
-            x = x['outputs']
         out = self._decode_head_forward_test(x, img_metas)
         out = resize(
             input=out,
@@ -140,26 +143,17 @@ class EncoderDecoder(BaseSegmentor):
             dict[str, Tensor]: a dictionary of loss components
         """
 
-        x = self.extract_feat(img)
-
-        infos = None
-        if isinstance(x, dict) and 'infos' in x:
-            infos = x['infos']
-            x = x['outputs']
+        x = self.extract_feat(img, gt_semantic_seg)
 
         losses = dict()
 
-        loss_decode = self._decode_head_forward_train(x, img_metas,
-                                                      gt_semantic_seg)
+        loss_decode = self._decode_head_forward_train(x, img_metas, gt_semantic_seg)
         losses.update(loss_decode)
 
         if self.with_auxiliary_head:
             loss_aux = self._auxiliary_head_forward_train(
                 x, img_metas, gt_semantic_seg)
             losses.update(loss_aux)
-
-        if infos is not None:
-            losses.update({'infos': infos})
 
         return losses
 

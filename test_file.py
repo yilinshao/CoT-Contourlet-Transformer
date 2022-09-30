@@ -1,4 +1,6 @@
 from torch import nn
+import torch
+from torch.nn.functional import one_hot
 
 class SubNet_1(nn.Module):
     def __init__(self):
@@ -23,11 +25,10 @@ class Net(nn.Module):
         self.net_2.conv = conv
 
 def main():
-    net = Net()
-    net_1 = net.net_1
-    net_2 = net.net_2
-
-    print(id(net_1.conv) == id(net_2.conv))
+    feat = torch.rand(4, 5, 3, 3)
+    gt = torch.ones(4, 1, 3, 3)
+    one_hot_gt = one_hot(gt, num_classes=3)
+    print(one_hot_gt)
 
 if __name__ == '__main__':
     main()

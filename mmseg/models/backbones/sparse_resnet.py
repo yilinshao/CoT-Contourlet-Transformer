@@ -22,7 +22,7 @@ def to_sparse(x, th=0.7):
 
 
     c, h, w = x.shape[-3:]
-    x[torch.where(x < th)] = 0.0
+    # x[torch.where(x < th)] = 0.0
     x_sp = spconv.SparseConvTensor.from_dense(x.reshape(-1, h, w, c))
 
     return x_sp
@@ -417,6 +417,7 @@ class SpResNet(BaseModule):
 
     def __init__(self,
                  depth,
+                 stem_downsample=True,
                  in_channels=3,
                  stem_channels=64,
                  base_channels=64,
@@ -444,6 +445,7 @@ class SpResNet(BaseModule):
         if depth not in self.arch_settings:
             raise KeyError(f'invalid depth {depth} for resnet')
 
+        self.stem_downsample = stem_downsample
         self.pretrained = pretrained
         self.zero_init_residual = zero_init_residual
         block_init_cfg = None
@@ -648,26 +650,46 @@ class SpResNet(BaseModule):
         if self.deep_stem:
             raise ValueError('deep_stem is not supported for spconv')
         else:
-            self.input_stem = spconv.SparseSequential(
-                build_sparse_conv_layer(self.conv_cfg,
-                                        in_channels,
-                                        stem_channels,
-                                        kernel_size=7,
-                                        stride=1,
-                                        padding=3,
-                                        bias=False),
-                spconv.SparseMaxPool2d(kernel_size=2, stride=2, padding=0),
-                build_sparse_conv_layer(self.conv_cfg,
-                                        stem_channels,
-                                        stem_channels,
-                                        kernel_size=3,
-                                        stride=1,
-                                        padding=1,
-                                        bias=False),
-                build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
-                nn.ReLU(inplace=True),
-                spconv.SparseMaxPool2d(kernel_size=3, stride=2, padding=1),
-            )
+            if self.stem_downsample:
+                self.input_stem = spconv.SparseSequential(
+                    build_sparse_conv_layer(self.conv_cfg,
+                                            in_channels,
+                                            stem_channels,
+                                            kernel_size=7,
+                                            stride=1,
+                                            padding=3,
+                                            bias=False),
+                    spconv.SparseMaxPool2d(kernel_size=2, stride=2, padding=0),
+                    build_sparse_conv_layer(self.conv_cfg,
+                                            stem_channels,
+                                            stem_channels,
+                                            kernel_size=3,
+                                            stride=1,
+                                            padding=1,
+                                            bias=False),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
+                    nn.ReLU(inplace=True),
+                    spconv.SparseMaxPool2d(kernel_size=3, stride=2, padding=1),
+                )
+            else:
+                self.input_stem = spconv.SparseSequential(
+                    build_sparse_conv_layer(self.conv_cfg,
+                                            in_channels,
+                                            stem_channels,
+                                            kernel_size=7,
+                                            stride=1,
+                                            padding=3,
+                                            bias=False),
+                    build_sparse_conv_layer(self.conv_cfg,
+                                            stem_channels,
+                                            stem_channels,
+                                            kernel_size=3,
+                                            stride=1,
+                                            padding=1,
+                                            bias=False),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
+                    nn.ReLU(inplace=True),
+                )
 
     def _freeze_stages(self):
         """Freeze stages param and norm stats."""
@@ -691,20 +713,22 @@ class SpResNet(BaseModule):
     def forward(self, x):
         """Forward function."""
 
-        th = 0.7
+        # th = 0.7
+        #
+        # if x.max() < th:
+        #     outs = []
+        #     x_n, x_c, x_h, x_w = x.shape
+        #     for i in range(len(self.res_layers)):
+        #         if i in self.out_indices:
+        #             x_w_out = int(x_w / self.output_ds_rate[i])
+        #             x_h_out = int(x_h / self.output_ds_rate[i])
+        #             x_out = torch.zeros(x_n, self.output_channels[i], x_h_out, x_w_out).cuda()
+        #             outs.append(x_out)
+        #
+        #     return tuple(outs)
+        # x = to_sparse(x, th)
 
-        if x.max() < th:
-            outs = []
-            x_n, x_c, x_h, x_w = x.shape
-            for i in range(len(self.res_layers)):
-                if i in self.out_indices:
-                    x_w_out = int(x_w / self.output_ds_rate[i])
-                    x_h_out = int(x_h / self.output_ds_rate[i])
-                    x_out = torch.zeros(x_n, self.output_channels[i], x_h_out, x_w_out).cuda()
-                    outs.append(x_out)
-
-            return tuple(outs)
-        x = to_sparse(x, th)
+        x = to_sparse(x)
         x = self.input_stem(x)
 
 

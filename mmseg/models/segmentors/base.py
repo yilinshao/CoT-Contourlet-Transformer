@@ -13,9 +13,10 @@ from mmcv.runner import BaseModule, auto_fp16
 class BaseSegmentor(BaseModule, metaclass=ABCMeta):
     """Base class for segmentors."""
 
-    def __init__(self, init_cfg=None):
+    def __init__(self, init_cfg=None, label_in_train=False):
         super(BaseSegmentor, self).__init__(init_cfg)
         self.fp16_enabled = False
+        self.label_in_train = label_in_train
 
     @property
     def with_neck(self):

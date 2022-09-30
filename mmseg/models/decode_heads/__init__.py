@@ -30,6 +30,7 @@ from .stdc_head import STDCHead
 from .uper_head import UPerHead
 from .vit_mla_head import VIT_MLAHead
 from .vit_mla_auxi_head import VIT_MLA_AUXIHead
+from .pseudo_head import PseudoHead
 
 __all__ = [
     'FCNHead', 'PSPHead', 'ASPPHead', 'PSAHead', 'NLHead', 'GCHead', 'CCHead',
@@ -38,5 +39,5 @@ __all__ = [
     'PointHead', 'APCHead', 'DMHead', 'LRASPPHead', 'SETRUPHead',
     'SETRMLAHead', 'DPTHead', 'SETRMLAHead', 'SegmenterMaskTransformerHead',
     'SegformerHead', 'ISAHead', 'STDCHead', 'IterativeDecodeHead',
-    'KernelUpdateHead', 'KernelUpdator'
+    'KernelUpdateHead', 'KernelUpdator', 'PseudoHead'
 ]

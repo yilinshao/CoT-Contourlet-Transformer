@@ -84,7 +84,7 @@ model = dict(
 
 optimizer = dict(lr=0.001, weight_decay=0.0,
                  paramwise_cfg=dict(custom_keys={'head': dict(lr_mult=10.),
-                                                 'scale_factor': dict(lr_mult=50.),
+                                                 'scale_factor': dict(lr_mult=10.),
                                                  'resnet': dict(lr_mult=10.),
                                                  'absolute_pos_embed': dict(decay_mult=0.),
                                                  'relative_position_bias_table': dict(decay_mult=0.),
