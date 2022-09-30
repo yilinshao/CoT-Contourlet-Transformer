@@ -1,8 +1,9 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import numpy as np
 import torch.nn as nn
 from mmcv.cnn import ConvModule
 
-from mmseg.ops import resize
+from mmseg.ops import Upsample, resize
 from ..builder import HEADS
 from .decode_head import BaseDecodeHead
 
@@ -10,8 +11,10 @@ from .decode_head import BaseDecodeHead
 @HEADS.register_module()
 class FPNHead(BaseDecodeHead):
     """Panoptic Feature Pyramid Networks.
+
     This head is the implementation of `Semantic FPN
     <https://arxiv.org/abs/1901.02446>`_.
+
     Args:
         feature_strides (tuple[int]): The strides for input feature maps.
             stack_lateral. All strides suppose to be power of 2. The first
@@ -43,7 +46,7 @@ class FPNHead(BaseDecodeHead):
                         act_cfg=self.act_cfg))
                 if feature_strides[i] != feature_strides[0]:
                     scale_head.append(
-                        nn.Upsample(
+                        Upsample(
                             scale_factor=2,
                             mode='bilinear',
                             align_corners=self.align_corners))

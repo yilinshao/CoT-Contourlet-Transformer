@@ -1,5 +1,5 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import os.path as osp
-import tempfile
 
 import mmcv
 import numpy as np
@@ -7,9 +7,11 @@ from PIL import Image
 
 from .builder import DATASETS
 from .custom import CustomDataset
-from mmseg.utils import get_root_logger
-from mmcv.utils import print_log
 
+from mmcv.utils import print_log
+from mmseg.utils import get_root_logger
+
+import random
 
 
 @DATASETS.register_module()
@@ -93,64 +95,65 @@ class ADE20KDataset(CustomDataset):
             reduce_zero_label=True,
             **kwargs)
 
-    def results2img(self, results, imgfile_prefix, to_label_id):
+    def results2img(self, results, imgfile_prefix, to_label_id, indices=None):
         """Write the segmentation results to images.
 
         Args:
-            results (list[list | tuple | ndarray]): Testing results of the
+            results (list[ndarray]): Testing results of the
                 dataset.
             imgfile_prefix (str): The filename prefix of the png files.
                 If the prefix is "somepath/xxx",
                 the png files will be named "somepath/xxx.png".
             to_label_id (bool): whether convert output to label_id for
-                submission
+                submission.
+            indices (list[int], optional): Indices of input results, if not
+                set, all the indices of the dataset will be used.
+                Default: None.
 
         Returns:
             list[str: str]: result txt files which contains corresponding
             semantic segmentation images.
         """
+        if indices is None:
+            indices = list(range(len(self)))
+
         mmcv.mkdir_or_exist(imgfile_prefix)
         result_files = []
-        prog_bar = mmcv.ProgressBar(len(self))
-        for idx in range(len(self)):
-            result = results[idx]
+        for result, idx in zip(results, indices):
 
             filename = self.img_infos[idx]['filename']
             basename = osp.splitext(osp.basename(filename))[0]
 
-            # save seg_logit
-            if len(result.shape) == 3:
-                # print(result.shape)
-                npy_filename = osp.join(imgfile_prefix, f'{basename}.npy')
-                np.save(npy_filename, result)
-                result_files.append(npy_filename)
+            png_filename = osp.join(imgfile_prefix, f'{basename}.png')
 
-            # save seg_pred
-            if len(result.shape) == 2:
-                # print(result.shape)
-                png_filename = osp.join(imgfile_prefix, f'{basename}.png')
-                result = result + 1
+            # The  index range of official requirement is from 0 to 150.
+            # But the index range of output is from 0 to 149.
+            # That is because we set reduce_zero_label=True.
+            result = result + 1
 
-                output = Image.fromarray(result.astype(np.uint8))
-                output.save(png_filename)
-                result_files.append(png_filename)
-
-            prog_bar.update()
+            output = Image.fromarray(result.astype(np.uint8))
+            output.save(png_filename)
+            result_files.append(png_filename)
 
         return result_files
 
-    def format_results(self, results, imgfile_prefix=None, to_label_id=True):
-        """Format the results into dir (standard format for Cityscapes
-        evaluation).
+    def format_results(self,
+                       results,
+                       imgfile_prefix,
+                       to_label_id=True,
+                       indices=None):
+        """Format the results into dir (standard format for ade20k evaluation).
 
         Args:
             results (list): Testing results of the dataset.
             imgfile_prefix (str | None): The prefix of images files. It
                 includes the file path and the prefix of filename, e.g.,
-                "a/b/prefix". If not specified, a temp file will be created.
-                Default: None.
+                "a/b/prefix".
             to_label_id (bool): whether convert output to label_id for
                 submission. Default: False
+            indices (list[int], optional): Indices of input results, if not
+                set, all the indices of the dataset will be used.
+                Default: None.
 
         Returns:
             tuple: (result_files, tmp_dir), result_files is a list containing
@@ -158,29 +161,34 @@ class ADE20KDataset(CustomDataset):
                 for saving json/png files when img_prefix is not specified.
         """
 
-        assert isinstance(results, list), 'results must be a list'
-        assert len(results) == len(self), (
-            'The length of results is not equal to the dataset len: '
-            f'{len(results)} != {len(self)}')
+        if indices is None:
+            indices = list(range(len(self)))
 
-        if imgfile_prefix is None:
-            tmp_dir = tempfile.TemporaryDirectory()
-            imgfile_prefix = tmp_dir.name
-        else:
-            tmp_dir = None
-        result_files = self.results2img(results, imgfile_prefix, to_label_id)
-        return result_files, tmp_dir
+        assert isinstance(results, list), 'results must be a list.'
+        assert isinstance(indices, list), 'indices must be a list.'
+
+        result_files = self.results2img(results, imgfile_prefix, to_label_id,
+                                        indices)
+        return result_files
 
 
 @DATASETS.register_module()
 class ADE20KDatasetWithNSCT(ADE20KDataset):
-    def __init__(self, nsct_dir, nsct_suffix, **kwargs):
+    def __init__(self, nsct_dir, nsct_suffix, sample_ratio=1, **kwargs):
+        """
+        ADE20K dataset and its non-subsampled contourlet trasformation
+        :param nsct_dir: nsct images directory
+        :param nsct_suffix: nsct images suffix
+        :param sample_ratio: randomly select from the dataset for testing
+        :param kwargs:
+        """
         super(ADE20KDatasetWithNSCT, self).__init__(**kwargs)
-        self.use_nsct = True
         self.nsct_dir = nsct_dir
         self.nsct_suffix = nsct_suffix
         self.img_dir = kwargs['img_dir']
         self.ann_dir = kwargs['ann_dir']
+        assert 0 < sample_ratio <= 1
+        self.sample_ratio = sample_ratio
 
         if self.data_root is not None:
             if not osp.isabs(self.img_dir):
@@ -239,6 +247,12 @@ class ADE20KDatasetWithNSCT(ADE20KDataset):
                     img_info['nsct'] = dict(nsct_feature=nsct_feature)
                 img_infos.append(img_info)
 
+        #  randomly select images from the whole dataset
+        if self.sample_ratio < 1:
+            sample_num = int(len(img_infos) * self.sample_ratio)
+            random.seed(10)
+            img_infos = random.sample(img_infos, sample_num)
+
         print_log(f'Loaded {len(img_infos)} images', logger=get_root_logger())
         return img_infos
 
@@ -286,3 +300,4 @@ class ADE20KDatasetWithNSCT(ADE20KDataset):
         results = dict(img_info=img_info, nsct_info=nsct_info)
         self.pre_pipeline(results)
         return self.pipeline(results)
+

@@ -1,9 +1,14 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 # Modified from https://github.com/facebookresearch/detectron2/tree/master/projects/PointRend/point_head/point_head.py  # noqa
 
 import torch
 import torch.nn as nn
-from mmcv.cnn import ConvModule, normal_init
-from mmcv.ops import point_sample
+from mmcv.cnn import ConvModule
+
+try:
+    from mmcv.ops import point_sample
+except ModuleNotFoundError:
+    point_sample = None
 
 from mmseg.models.builder import HEADS
 from mmseg.ops import resize
@@ -35,6 +40,8 @@ def calculate_uncertainty(seg_logits):
 class PointHead(BaseCascadeDecodeHead):
     """A mask point head use in PointRend.
 
+    This head is implemented of `PointRend: Image Segmentation as
+    Rendering <https://arxiv.org/abs/1912.08193>`_.
     ``PointHead`` use shared multi-layer perceptron (equivalent to
     nn.Conv1d) to predict the logit of input points. The fine-grained feature
     and coarse feature will be concatenate together for predication.
@@ -69,7 +76,12 @@ class PointHead(BaseCascadeDecodeHead):
             conv_cfg=conv_cfg,
             norm_cfg=norm_cfg,
             act_cfg=act_cfg,
+            init_cfg=dict(
+                type='Normal', std=0.01, override=dict(name='fc_seg')),
             **kwargs)
+        if point_sample is None:
+            raise RuntimeError('Please install mmcv-full for '
+                               'point_sample ops')
 
         self.num_fcs = num_fcs
         self.coarse_pred_each_layer = coarse_pred_each_layer
@@ -100,10 +112,6 @@ class PointHead(BaseCascadeDecodeHead):
         if self.dropout_ratio > 0:
             self.dropout = nn.Dropout(self.dropout_ratio)
         delattr(self, 'conv_seg')
-
-    def init_weights(self):
-        """Initialize weights of classification layer."""
-        normal_init(self.fc_seg, std=0.001)
 
     def cls_seg(self, feat):
         """Classify each pixel with fc."""
@@ -248,9 +256,16 @@ class PointHead(BaseCascadeDecodeHead):
     def losses(self, point_logits, point_label):
         """Compute segmentation loss."""
         loss = dict()
-        loss['loss_point'] = self.loss_decode(
+        if not isinstance(self.loss_decode, nn.ModuleList):
+            losses_decode = [self.loss_decode]
+        else:
+            losses_decode = self.loss_decode
+        for loss_module in losses_decode:
+            loss['point' + loss_module.loss_name] = loss_module(
+                point_logits, point_label, ignore_index=self.ignore_index)
+
+        loss['acc_point'] = accuracy(
             point_logits, point_label, ignore_index=self.ignore_index)
-        loss['acc_point'] = accuracy(point_logits, point_label)
         return loss
 
     def get_points_train(self, seg_logits, uncertainty_func, cfg):

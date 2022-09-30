@@ -1,3 +1,4 @@
+# Copyright (c) OpenMMLab. All rights reserved.
 import glob
 import os
 from os.path import dirname, exists, isdir, join, relpath
@@ -45,8 +46,6 @@ def test_config_build_segmentor():
         config_mod = Config.fromfile(config_fpath)
 
         config_mod.model
-        config_mod.train_cfg
-        config_mod.test_cfg
         print('Building segmentor, config_fpath = {!r}'.format(config_fpath))
 
         # Remove pretrained keys to allow for testing in an offline environment
@@ -54,10 +53,7 @@ def test_config_build_segmentor():
             config_mod.model['pretrained'] = None
 
         print('building {}'.format(config_fname))
-        segmentor = build_segmentor(
-            config_mod.model,
-            train_cfg=config_mod.train_cfg,
-            test_cfg=config_mod.test_cfg)
+        segmentor = build_segmentor(config_mod.model)
         assert segmentor is not None
 
         head_config = config_mod.model['decode_head']
@@ -70,9 +66,10 @@ def test_config_data_pipeline():
     CommandLine:
         xdoctest -m tests/test_config.py test_config_build_data_pipeline
     """
-    from mmcv import Config
-    from mmseg.datasets.pipelines import Compose
     import numpy as np
+    from mmcv import Config
+
+    from mmseg.datasets.pipelines import Compose
 
     config_dpath = _get_config_directory()
     print('Found config_dpath = {!r}'.format(config_dpath))
@@ -158,7 +155,7 @@ def _check_decode_head(decode_head_cfg, decode_head):
 
     if decode_head_cfg['type'] == 'PointHead':
         assert decode_head_cfg.channels+decode_head_cfg.num_classes == \
-            decode_head.fc_seg.in_channels
+               decode_head.fc_seg.in_channels
         assert decode_head.fc_seg.out_channels == decode_head_cfg.num_classes
     else:
         assert decode_head_cfg.channels == decode_head.conv_seg.in_channels

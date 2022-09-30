@@ -1,8 +1,9 @@
-import logging
+# Copyright (c) OpenMMLab. All rights reserved.
+import warnings
 
 import torch.nn as nn
-from mmcv.cnn import ConvModule, constant_init, kaiming_init
-from mmcv.runner import load_checkpoint
+from mmcv.cnn import ConvModule
+from mmcv.runner import BaseModule
 from torch.nn.modules.batchnorm import _BatchNorm
 
 from ..builder import BACKBONES
@@ -10,8 +11,12 @@ from ..utils import InvertedResidual, make_divisible
 
 
 @BACKBONES.register_module()
-class MobileNetV2(nn.Module):
+class MobileNetV2(BaseModule):
     """MobileNetV2 backbone.
+
+    This backbone is the implementation of
+    `MobileNetV2: Inverted Residuals and Linear Bottlenecks
+    <https://arxiv.org/abs/1801.04381>`_.
 
     Args:
         widen_factor (float): Width multiplier, multiply number of
@@ -35,6 +40,9 @@ class MobileNetV2(nn.Module):
             and its variants only. Default: False.
         with_cp (bool): Use checkpoint or not. Using checkpoint will save some
             memory while slowing down the training speed. Default: False.
+        pretrained (str, optional): model pretrained path. Default: None
+        init_cfg (dict or list[dict], optional): Initialization config dict.
+            Default: None
     """
 
     # Parameters to build layers. 3 parameters are needed to construct a
@@ -52,8 +60,30 @@ class MobileNetV2(nn.Module):
                  norm_cfg=dict(type='BN'),
                  act_cfg=dict(type='ReLU6'),
                  norm_eval=False,
-                 with_cp=False):
-        super(MobileNetV2, self).__init__()
+                 with_cp=False,
+                 pretrained=None,
+                 init_cfg=None):
+        super(MobileNetV2, self).__init__(init_cfg)
+
+        self.pretrained = pretrained
+        assert not (init_cfg and pretrained), \
+            'init_cfg and pretrained cannot be setting at the same time'
+        if isinstance(pretrained, str):
+            warnings.warn('DeprecationWarning: pretrained is a deprecated, '
+                          'please use "init_cfg" instead')
+            self.init_cfg = dict(type='Pretrained', checkpoint=pretrained)
+        elif pretrained is None:
+            if init_cfg is None:
+                self.init_cfg = [
+                    dict(type='Kaiming', layer='Conv2d'),
+                    dict(
+                        type='Constant',
+                        val=1,
+                        layer=['_BatchNorm', 'GroupNorm'])
+                ]
+        else:
+            raise TypeError('pretrained must be a str or None')
+
         self.widen_factor = widen_factor
         self.strides = strides
         self.dilations = dilations
@@ -62,7 +92,7 @@ class MobileNetV2(nn.Module):
         for index in out_indices:
             if index not in range(0, 7):
                 raise ValueError('the item in out_indices must in '
-                                 f'range(0, 8). But received {index}')
+                                 f'range(0, 7). But received {index}')
 
         if frozen_stages not in range(-1, 7):
             raise ValueError('frozen_stages must be in range(-1, 7). '
@@ -132,19 +162,6 @@ class MobileNetV2(nn.Module):
             self.in_channels = out_channels
 
         return nn.Sequential(*layers)
-
-    def init_weights(self, pretrained=None):
-        if isinstance(pretrained, str):
-            logger = logging.getLogger()
-            load_checkpoint(self, pretrained, strict=False, logger=logger)
-        elif pretrained is None:
-            for m in self.modules():
-                if isinstance(m, nn.Conv2d):
-                    kaiming_init(m)
-                elif isinstance(m, (_BatchNorm, nn.GroupNorm)):
-                    constant_init(m, 1)
-        else:
-            raise TypeError('pretrained must be a str or None')
 
     def forward(self, x):
         x = self.conv1(x)
