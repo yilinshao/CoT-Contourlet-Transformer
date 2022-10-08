@@ -115,6 +115,7 @@ work_dirs/
 transfer/
 distributed/
 results/
+mmseg/.mim/
 
 # Pytorch
 *.pth

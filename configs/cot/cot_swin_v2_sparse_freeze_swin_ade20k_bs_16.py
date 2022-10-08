@@ -7,6 +7,7 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 checkpoint_file = 'https://download.openmmlab.com/mmsegmentation/v0.5/pretrain/swin/swin_large_patch4_window7_224_22k_20220412-aeecf2aa.pth'  # noqa
 
 model = dict(
+    freeze_swin=True,
     backbone=dict(
         init_cfg=dict(type='Pretrained', checkpoint=checkpoint_file),
         pretrain_img_size=224,

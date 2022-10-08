@@ -3,6 +3,7 @@ norm_cfg = dict(type='SyncBN', requires_grad=True)
 backbone_norm_cfg = dict(type='LN', requires_grad=True)
 model = dict(
     type='EncoderDecoderWithGT',
+    freeze_swin=False,
     pretrained=None,
     backbone=dict(
         type='SwinTransformer',

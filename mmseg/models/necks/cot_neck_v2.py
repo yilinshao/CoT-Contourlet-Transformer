@@ -148,28 +148,25 @@ class CoTNeckV2(BaseDecodeHead):
         losses = self.losses(seg_logits, gt_semantic_seg)
         return losses
 
+    def _get_pseudo_gt(self, output):
+        _, pseudo_gt = output.topk(1, dim=1)
+
+        return pseudo_gt.long()
+
     def _find_deficient_points(self, vanilla_output, gt):
+
+        if not self.training:
+            assert gt is None
+            gt = self._get_pseudo_gt(vanilla_output)
 
         gt = resize(gt.float(), vanilla_output.shape[-2:]).long()
 
         bs = vanilla_output.shape[0]
 
-
         gt = F.one_hot(gt.squeeze(1), num_classes=256)[..., :self.num_classes]
-        print('=' * 20)
-        print(gt.shape)
-        print(gt.squeeze(1).shape)
-        print(gt.squeeze(1).max())
-        print(self.num_classes)
-        print('=' * 20)
-
         gt = gt.permute(0, 3, 1, 2)
 
         confidence_map = torch.sum(gt * vanilla_output, dim=1)
-
-        print('='*20)
-        print(confidence_map.shape)
-        print('='*20)
 
         n_points = int(vanilla_output.shape[-1] * vanilla_output.shape[-2] * self.deficient_ratio)
         _, deficient_coords = confidence_map.reshape(bs, -1).topk(n_points, largest=False)
@@ -315,7 +312,7 @@ class CoTNeckV2(BaseDecodeHead):
         #  vanilla_output = (1/4, class_num)
         return cot_feats, cot_mid_feats, vanilla_output
 
-    def forward(self, inputs, img, gt_semantic_seg):
+    def forward(self, inputs, img, gt_semantic_seg=None):
         """Forward function."""
         cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, img[:, 4:], gt_semantic_seg)
         assert len(cot_mid_feats) == 3

@@ -22,6 +22,7 @@ class EncoderDecoderWithGT(BaseSegmentor):
     def __init__(self,
                  backbone,
                  decode_head,
+                 freeze_swin=False,
                  neck=None,
                  auxiliary_head=None,
                  train_cfg=None,
@@ -43,6 +44,14 @@ class EncoderDecoderWithGT(BaseSegmentor):
         self.test_cfg = test_cfg
 
         assert self.with_decode_head
+
+        if freeze_swin:
+            for name, param in self.named_parameters():
+                if 'backbone' in name or \
+                        'lateral' in name or \
+                        'psp' in name or \
+                        'fpn' in name:
+                    param.requires_grad_(False)
 
     def _init_decode_head(self, decode_head):
         """Initialize ``decode_head``"""
@@ -257,9 +266,9 @@ class EncoderDecoderWithGT(BaseSegmentor):
             flip_direction = img_meta[0]['flip_direction']
             assert flip_direction in ['horizontal', 'vertical']
             if flip_direction == 'horizontal':
-                output = output.flip(dims=(3, ))
+                output = output.flip(dims=(3,))
             elif flip_direction == 'vertical':
-                output = output.flip(dims=(2, ))
+                output = output.flip(dims=(2,))
 
         return output
 
