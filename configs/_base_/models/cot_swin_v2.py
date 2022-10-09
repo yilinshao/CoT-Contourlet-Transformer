@@ -51,8 +51,7 @@ model = dict(
             style='pytorch',
             contract_dilation=True,
             init_cfg=None),
-        loss_decode=dict(
-            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)),
+    ),
     decode_head=dict(
         type='FCNHead',
         in_channels=512,
@@ -64,6 +63,8 @@ model = dict(
         num_classes=150,
         norm_cfg=norm_cfg,
         align_corners=False,
+        loss_decode=dict(
+            type='CrossEntropyLoss', use_sigmoid=False, loss_weight=1.0)
     ),
     auxiliary_head=[
         dict(

@@ -731,7 +731,6 @@ class SpResNet(BaseModule):
         x = to_sparse(x)
         x = self.input_stem(x)
 
-
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

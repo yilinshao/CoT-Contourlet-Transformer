@@ -14,19 +14,45 @@ model = dict(
         depths=[2, 2, 18, 2],
         num_heads=[6, 12, 24, 48],
         window_size=7),
-    neck=dict(in_channels=[192, 384, 768, 1536], num_classes=150),
+    neck=dict(in_channels=[192, 384, 768, 1536],
+              num_classes=150
+              ),
     decode_head=dict(num_classes=150),
     test_cfg=dict(mode='slide', crop_size=(512, 512), stride=(341, 341)),
 )
 
-optimizer = dict(lr=0.001, weight_decay=0.0,
-                 paramwise_cfg=dict(custom_keys={'head': dict(lr_mult=10.),
-                                                 'resnet': dict(lr_mult=10.),
-                                                 'absolute_pos_embed': dict(decay_mult=0.),
-                                                 'relative_position_bias_table': dict(decay_mult=0.),
-                                                 'norm': dict(decay_mult=0.)
-                                                 })
-                 )
+# optimizer = dict(lr=0.001, weight_decay=0.0,
+#                  paramwise_cfg=dict(custom_keys={'head': dict(lr_mult=10.),
+#                                                  'resnet': dict(lr_mult=10.),
+#                                                  'absolute_pos_embed': dict(decay_mult=0.),
+#                                                  'relative_position_bias_table': dict(decay_mult=0.),
+#                                                  'norm': dict(decay_mult=0.)
+#                                                  })
+#                  )
+
+optimizer = dict(
+    _delete_=True,
+    type='AdamW',
+    lr=0.00006,
+    betas=(0.9, 0.999),
+    weight_decay=0.01,
+    paramwise_cfg=dict(
+        custom_keys={'head': dict(lr_mult=10.),
+                     'resnet': dict(lr_mult=10.),
+                     'absolute_pos_embed': dict(decay_mult=0.),
+                     'relative_position_bias_table': dict(decay_mult=0.),
+                     'norm': dict(decay_mult=0.)
+                     }))
+
+lr_config = dict(
+    _delete_=True,
+    policy='poly',
+    warmup='linear',
+    warmup_iters=1500,
+    warmup_ratio=1e-6,
+    power=1.0,
+    min_lr=0.0,
+    by_epoch=False)
 
 img_norm_cfg = dict(
     mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375], to_rgb=True)
@@ -34,7 +60,7 @@ crop_size = (512, 512)
 find_unused_parameters = True
 
 data = dict(
-    samples_per_gpu=4,
+    samples_per_gpu=8,
     train=dict(
         nsct_dir='nsct_01/training'),
     val=dict(

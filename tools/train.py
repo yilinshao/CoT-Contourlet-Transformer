@@ -19,7 +19,7 @@ from mmseg.datasets import build_dataset
 from mmseg.models import build_segmentor
 from mmseg.utils import (collect_env, get_device, get_root_logger,
                          setup_multi_processes)
-
+from mmcv.runner import load_checkpoint
 # os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
 
@@ -202,6 +202,11 @@ def main():
         train_cfg=cfg.get('train_cfg'),
         test_cfg=cfg.get('test_cfg'))
     model.init_weights()
+
+    if cfg.model.get('freeze_swin'):
+        uper_swin_checkpoint_file = cfg.model.get('pretrained_uper_swin')
+        base_segmentor_ckp = load_checkpoint(model, uper_swin_checkpoint_file, map_location='cpu')
+
 
     # SyncBN is not support for DP
     if not distributed:

@@ -28,7 +28,8 @@ class EncoderDecoderWithGT(BaseSegmentor):
                  train_cfg=None,
                  test_cfg=None,
                  pretrained=None,
-                 init_cfg=None):
+                 init_cfg=None,
+                 pretrained_uper_swin=None):
         super(EncoderDecoderWithGT, self).__init__(init_cfg)
         if pretrained is not None:
             assert backbone.get('pretrained') is None, \
@@ -47,10 +48,9 @@ class EncoderDecoderWithGT(BaseSegmentor):
 
         if freeze_swin:
             for name, param in self.named_parameters():
-                if 'backbone' in name or \
-                        'lateral' in name or \
-                        'psp' in name or \
-                        'fpn' in name:
+                if 'backbone' in name:
+                    param.requires_grad_(False)
+                elif 'neck' in name and 'cot_' not in name and 'sparse_resnet' not in name:
                     param.requires_grad_(False)
 
     def _init_decode_head(self, decode_head):
