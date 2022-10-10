@@ -239,8 +239,10 @@ class CoTNeckV2(BaseDecodeHead):
         # laterals_dirs[(1, 2), (1, 1)]
         if self.ct_levels == 2:
             ct_dirs = [x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
+        elif self.ct_levels == 3:
+            ct_dirs = [x_dirs[:, 3: 7], x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
         else:
-            raise ValueError('ct_levels should be 2')
+            raise ValueError('ct_levels should be 2 or 3')
 
         # build top-down path
         used_backbone_levels = len(laterals)
@@ -314,7 +316,13 @@ class CoTNeckV2(BaseDecodeHead):
 
     def forward(self, inputs, img, gt_semantic_seg=None):
         """Forward function."""
-        cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, img[:, 4:], gt_semantic_seg)
+        x_dirs = img[:, 4:]
+        if self.ct_levels == 2:
+            assert x_dirs.shape[1] == 3 # = 1 + 2
+        elif self.ct_levels == 3:
+            assert x_dirs.shape[1] == 7 # = 1 + 2 + 4
+
+        cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, x_dirs, gt_semantic_seg)
         assert len(cot_mid_feats) == 3
         cot_mid_feats_1 = cot_mid_feats[0]
         cot_mid_feats_2 = cot_mid_feats[1]

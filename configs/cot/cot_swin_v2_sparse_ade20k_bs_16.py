@@ -60,7 +60,7 @@ crop_size = (512, 512)
 find_unused_parameters = True
 
 data = dict(
-    samples_per_gpu=8,
+    samples_per_gpu=4,
     train=dict(
         nsct_dir='nsct_01/training'),
     val=dict(
