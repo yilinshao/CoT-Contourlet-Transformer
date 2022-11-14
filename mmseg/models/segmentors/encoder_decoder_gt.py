@@ -29,7 +29,8 @@ class EncoderDecoderWithGT(BaseSegmentor):
                  test_cfg=None,
                  pretrained=None,
                  init_cfg=None,
-                 pretrained_uper_swin=None):
+                 pretrained_uper_swin=None
+                 ):
         super(EncoderDecoderWithGT, self).__init__(init_cfg)
         if pretrained is not None:
             assert backbone.get('pretrained') is None, \
@@ -69,14 +70,14 @@ class EncoderDecoderWithGT(BaseSegmentor):
             else:
                 self.auxiliary_head = builder.build_head(auxiliary_head)
 
-    def extract_feat(self, img, gt=None):
+    def extract_feat(self, img, img_metas=None, gt=None):
         """Extract features from images."""
         if self.training:
             assert gt is not None
         x = self.backbone(img[:, :3])
         if self.with_neck:
             if gt is not None:
-                x = self.neck(x, img, gt)
+                x = self.neck(x, img, gt, img_metas, show_decicient_points=False)
             else:
                 x = self.neck(x, img)
         return x
@@ -152,7 +153,7 @@ class EncoderDecoderWithGT(BaseSegmentor):
             dict[str, Tensor]: a dictionary of loss components
         """
 
-        x = self.extract_feat(img, gt_semantic_seg)
+        x = self.extract_feat(img, img_metas, gt_semantic_seg)
 
         losses = dict()
 

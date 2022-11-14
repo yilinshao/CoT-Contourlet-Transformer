@@ -94,7 +94,29 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
         else:
             return self.aug_test(imgs, img_metas, **kwargs)
 
-    @auto_fp16(apply_to=('img', ))
+    def input_check(self, img_metas, img):
+        import matplotlib.pyplot as plt
+        import sys
+
+        # show input image in a batch
+        for n in range(img.shape[0]):
+            print(img_metas[n])
+            rgb_image = img[n, 0:3, :, :].detach().cpu().numpy().transpose(1, 2, 0)
+            nsct_feats = img[n, 3:, :, :].detach().cpu().numpy()
+
+            # show RGB image
+            plt.imshow(rgb_image)
+            plt.title('rgb_image{}'.format(n))
+            plt.show()
+
+            # show nsct features
+            for i in range(nsct_feats.shape[0]):
+                plt.imshow(nsct_feats[i, :, :], cmap='gray')
+                plt.title('nsct_feature{}, level{}'.format(n, i))
+                plt.show()
+            sys.exit(0)
+
+    @auto_fp16(apply_to=('img', 'nsct_feature'))
     def forward(self, img, img_metas, return_loss=True, nsct_feature=None, **kwargs):
         """Calls either :func:`forward_train` or :func:`forward_test` depending
         on whether ``return_loss`` is ``True``.
@@ -111,6 +133,7 @@ class BaseSegmentor(BaseModule, metaclass=ABCMeta):
                     img[i] = torch.cat((img[i], nsct_feature[i]), dim=1)
             else:
                 img = torch.cat((img, nsct_feature), dim=1)
+            # self.input_check(img_metas, img)
         if return_loss:
             return self.forward_train(img, img_metas, **kwargs)
         else:

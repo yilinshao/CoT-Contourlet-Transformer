@@ -418,6 +418,7 @@ class SpResNet(BaseModule):
     def __init__(self,
                  depth,
                  stem_downsample=True,
+                 use_conv_in_stem=False,
                  in_channels=3,
                  stem_channels=64,
                  base_channels=64,
@@ -446,6 +447,7 @@ class SpResNet(BaseModule):
             raise KeyError(f'invalid depth {depth} for resnet')
 
         self.stem_downsample = stem_downsample
+        self.use_conv_in_stem = use_conv_in_stem
         self.pretrained = pretrained
         self.zero_init_residual = zero_init_residual
         block_init_cfg = None
@@ -650,7 +652,29 @@ class SpResNet(BaseModule):
         if self.deep_stem:
             raise ValueError('deep_stem is not supported for spconv')
         else:
-            if self.stem_downsample:
+            if self.use_conv_in_stem:
+                self.input_stem = nn.Sequential(
+                    build_conv_layer(self.conv_cfg,
+                                    in_channels,
+                                    stem_channels,
+                                    kernel_size=7,
+                                    stride=1,
+                                    padding=3,
+                                    bias=False),
+                    nn.ReLU(inplace=False),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
+                    build_conv_layer(self.conv_cfg,
+                                    stem_channels,
+                                    stem_channels,
+                                    kernel_size=5,
+                                    stride=1,
+                                    padding=2,
+                                    bias=False),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
+                    nn.ReLU(inplace=True),
+                )
+
+            elif self.stem_downsample:
                 self.input_stem = spconv.SparseSequential(
                     build_sparse_conv_layer(self.conv_cfg,
                                             in_channels,
@@ -660,6 +684,8 @@ class SpResNet(BaseModule):
                                             padding=3,
                                             bias=False),
                     spconv.SparseMaxPool2d(kernel_size=2, stride=2, padding=0),
+                    nn.ReLU(inplace=True),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
                     build_sparse_conv_layer(self.conv_cfg,
                                             stem_channels,
                                             stem_channels,
@@ -680,6 +706,8 @@ class SpResNet(BaseModule):
                                             stride=1,
                                             padding=3,
                                             bias=False),
+                    build_norm_layer(self.norm_cfg, stem_channels, postfix=1)[1],
+                    nn.ReLU(inplace=True),
                     build_sparse_conv_layer(self.conv_cfg,
                                             stem_channels,
                                             stem_channels,
@@ -710,7 +738,7 @@ class SpResNet(BaseModule):
             for param in m.parameters():
                 param.requires_grad = False
 
-    def forward(self, x):
+    def forward(self, sparse_coords, dense_x):
         """Forward function."""
 
         # th = 0.7
@@ -728,8 +756,17 @@ class SpResNet(BaseModule):
         #     return tuple(outs)
         # x = to_sparse(x, th)
 
-        x = to_sparse(x)
-        x = self.input_stem(x)
+        if self.use_conv_in_stem:
+            dense_x = self.input_stem(dense_x)
+
+            # dense_x_np = dense_x.detach().cpu().numpy()
+            # sparse_x_np = (dense_x * sparse_coords).detach().cpu().numpy()
+            # sparse_coords_np = sparse_coords.detach().cpu().numpy()
+
+            x = to_sparse(dense_x * sparse_coords)
+        else:
+            x = to_sparse(dense_x * sparse_coords)
+            x = self.input_stem(x)
 
         outs = []
         for i, layer_name in enumerate(self.res_layers):

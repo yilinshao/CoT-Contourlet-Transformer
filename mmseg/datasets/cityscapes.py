@@ -260,19 +260,24 @@ class CityscapesDatasetWithNSCT(CityscapesDataset):
 
         img_infos = []
         if split is not None:
-            with open(split) as f:
-                for line in f:
-                    img_name = line.strip()
-                    img_info = dict(filename=img_name + img_suffix)
-                    if ann_dir is not None:
-                        seg_map = img_name + seg_map_suffix
-                        img_info['ann'] = dict(seg_map=seg_map)
-                    if nsct_dir is not None:
-                        nsct_feature = img_name + nsct_suffix
-                        img_info['nsct'] = dict(nsct_feature=nsct_feature)
-                    img_infos.append(img_info)
+            lines = mmcv.list_from_file(
+                split, file_client_args=self.file_client_args)
+            for line in lines:
+                img_name = line.strip()
+                img_info = dict(filename=img_name + img_suffix)
+                if ann_dir is not None:
+                    seg_map = img_name + seg_map_suffix
+                    img_info['ann'] = dict(seg_map=seg_map)
+                if nsct_dir is not None:
+                    nsct_feature = img_name + nsct_suffix
+                    img_info['nsct'] = dict(nsct_feature=nsct_feature)
+                img_infos.append(img_info)
         else:
-            for img in mmcv.scandir(img_dir, img_suffix, recursive=True):
+            for img in self.file_client.list_dir_or_file(
+                    dir_path=img_dir,
+                    list_dir=False,
+                    suffix=img_suffix,
+                    recursive=True):
                 img_info = dict(filename=img)
                 if ann_dir is not None:
                     seg_map = img.replace(img_suffix, seg_map_suffix)
@@ -281,6 +286,7 @@ class CityscapesDatasetWithNSCT(CityscapesDataset):
                     nsct_feature = img.replace(img_suffix, nsct_suffix)
                     img_info['nsct'] = dict(nsct_feature=nsct_feature)
                 img_infos.append(img_info)
+            img_infos = sorted(img_infos, key=lambda x: x['filename'])
 
         print_log(f'Loaded {len(img_infos)} images', logger=get_root_logger())
         return img_infos

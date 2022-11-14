@@ -1,6 +1,9 @@
+import sys
+import numpy as np
 import torch.nn as nn
 import torch
 import copy
+import mmcv
 from mmcv.cnn import ConvModule, build_norm_layer
 from ..decode_heads.decode_head import BaseDecodeHead
 from ..decode_heads.psp_head import PPM
@@ -116,7 +119,15 @@ class CoTNeckV2(BaseDecodeHead):
 
         self.cot_conv_seg = nn.Conv2d(self.channels, self.num_classes, kernel_size=1)
 
-
+        if sparse_resnet_config.get('num_stages') == 1:
+            self.dir_feat_channel_mapping = ConvModule(
+                256,
+                self.channels,
+                1,
+                conv_cfg=self.conv_cfg,
+                norm_cfg=self.norm_cfg,
+                act_cfg=self.act_cfg,
+                inplace=False)
 
     def psp_forward(self, inputs):
         """Forward function of PSP module."""
@@ -163,10 +174,13 @@ class CoTNeckV2(BaseDecodeHead):
 
         bs = vanilla_output.shape[0]
 
+        mask_indexes = torch.where(gt.squeeze(1) == 255)
+
         gt = F.one_hot(gt.squeeze(1), num_classes=256)[..., :self.num_classes]
         gt = gt.permute(0, 3, 1, 2)
 
         confidence_map = torch.sum(gt * vanilla_output, dim=1)
+        confidence_map[mask_indexes] = 999
 
         n_points = int(vanilla_output.shape[-1] * vanilla_output.shape[-2] * self.deficient_ratio)
         _, deficient_coords = confidence_map.reshape(bs, -1).topk(n_points, largest=False)
@@ -178,18 +192,19 @@ class CoTNeckV2(BaseDecodeHead):
 
         return deficient_map.unsqueeze(1)
 
-    def _forward_dirs_feat(self, sparse_dirs, level):
-        dir_feat = self.sparse_resnet[level](sparse_dirs)
-        return dir_feat[0]
+    def _forward_dirs_feat(self, deficient_map, ct_dirs, level):
+        dir_feat = self.sparse_resnet[level](deficient_map, ct_dirs)[0]
+        if hasattr(self, 'dir_feat_channel_mapping'):
+            dir_feat = self.dir_feat_channel_mapping(dir_feat)
+        return dir_feat
 
 
     def _cot_upsample(self, deep_feats, ct_dirs, shallow_feats, deficient_map, level):
 
-        if deficient_map.shape[-1] != shallow_feats.shape[-2:]:
+        if deficient_map.shape[-2:] != shallow_feats.shape[-2:]:
             deficient_map = resize(deficient_map,
                                    shallow_feats.shape[-2:],
-                                   mode='bilinear',
-                                   align_corners=self.align_corners)
+                                   mode='nearest')
 
         if ct_dirs.shape[-2:] != shallow_feats.shape[-2:]:
             ct_dirs = resize(ct_dirs,
@@ -197,14 +212,14 @@ class CoTNeckV2(BaseDecodeHead):
                              mode='bilinear',
                              align_corners=self.align_corners)
 
-        sparse_dirs = deficient_map * ct_dirs
-        dir_feats = self._forward_dirs_feat(sparse_dirs, level)
+        # sparse_dirs = deficient_map * ct_dirs
+        dir_feats = self._forward_dirs_feat(deficient_map, ct_dirs, level)
 
         # fuse direction feature with deep feature,
         # and upsample 2x
 
         recomposed_feats = shallow_feats + dir_feats + resize(deep_feats,
-                                                              shallow_feats.shape[-2],
+                                                              shallow_feats.shape[-2:],
                                                               mode='bilinear',
                                                               align_corners=self.align_corners)
 
@@ -212,8 +227,25 @@ class CoTNeckV2(BaseDecodeHead):
 
         return recomposed_feats
 
+    def _show_deficient_points(self, deficient_points_maps, imgs, img_metas):
+        import matplotlib.pyplot as plt
 
-    def _forward_feature(self, inputs, x_dirs, gt):
+        bs = deficient_points_maps.shape[0]
+        for n in range(bs):
+            deficient_points_map = deficient_points_maps[n].transpose(1, 2, 0).squeeze(2)
+            decifient_point_coords = np.where(deficient_points_map == 1)
+
+            img = mmcv.imdenormalize(imgs[n].transpose(1, 2, 0), img_metas[n]['img_norm_cfg']['mean'],
+                                     img_metas[n]['img_norm_cfg']['std'], to_bgr=False)
+            plt.imshow(img.astype(np.int))
+            plt.show()
+
+            plt.imshow(img.astype(np.int))
+            plt.scatter(decifient_point_coords[1], decifient_point_coords[0], s=3.0, marker='o')
+            plt.show()
+
+
+    def _forward_feature(self, inputs, x_dirs, gt, img=None, img_metas=None, show_decicient_points=False):
         """Forward function for feature maps before classifying each pixel with
         ``self.cls_seg`` fc.
 
@@ -280,6 +312,11 @@ class CoTNeckV2(BaseDecodeHead):
         # cot upsample
         # deficient_points_map = (1/4)
         deficient_points_map = self._find_deficient_points(vanilla_output.detach(), gt)
+
+        if show_decicient_points:
+            img = resize(img, size=deficient_points_map.shape[-2:], mode='bilinear', align_corners=self.align_corners)
+            self._show_deficient_points(deficient_points_map.detach().cpu().numpy(),
+                                        img.detach().cpu().numpy(), img_metas)
         cot_mid_feats = []
         for i in range(used_backbone_levels - 1, 0, -1):
             if len(ct_dirs) < i:
@@ -293,11 +330,18 @@ class CoTNeckV2(BaseDecodeHead):
                 cot_mid_feats.append(cot_recompose[i - 1])
 
             else:
+                # try:
                 cot_recompose[i - 1] = self._cot_upsample(cot_recompose[i],
-                                                          ct_dirs[i - 1],
-                                                          cot_recompose[i - 1],
-                                                          deficient_points_map,
-                                                          i - 1)
+                                                              ct_dirs[i - 1],
+                                                              cot_recompose[i - 1],
+                                                              deficient_points_map,
+                                                              i - 1)
+                # except:
+                #     img = resize(img, size=deficient_points_map.shape[-2:], mode='bilinear', align_corners=self.align_corners)
+                #     self._show_deficient_points(deficient_points_map.detach().cpu().numpy(),
+                #                                 img.detach().cpu().numpy(), img_metas)
+                #     for img_meta in img_metas:
+                #         print(img_meta)
                 cot_mid_feats.append(cot_recompose[i - 1])
 
         # merge all CoT recomposed features
@@ -314,15 +358,22 @@ class CoTNeckV2(BaseDecodeHead):
         #  vanilla_output = (1/4, class_num)
         return cot_feats, cot_mid_feats, vanilla_output
 
-    def forward(self, inputs, img, gt_semantic_seg=None):
+    def forward(self, inputs, img, gt_semantic_seg=None, img_metas=None, show_decicient_points=False):
         """Forward function."""
         x_dirs = img[:, 4:]
         if self.ct_levels == 2:
-            assert x_dirs.shape[1] == 3 # = 1 + 2
+            assert x_dirs.shape[1] == 3  # = 1 + 2
         elif self.ct_levels == 3:
-            assert x_dirs.shape[1] == 7 # = 1 + 2 + 4
+            assert x_dirs.shape[1] == 7  # = 1 + 2 + 4
 
-        cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, x_dirs, gt_semantic_seg)
+        if show_decicient_points:
+            assert img_metas is not None
+            cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, x_dirs, gt_semantic_seg,
+                                                                             img[:, 0:3], img_metas,
+                                                                             show_decicient_points=True)
+        else:
+            cot_feats, cot_mid_feats, vanilla_output = self._forward_feature(inputs, x_dirs, gt_semantic_seg)
+
         assert len(cot_mid_feats) == 3
         cot_mid_feats_1 = cot_mid_feats[0]
         cot_mid_feats_2 = cot_mid_feats[1]

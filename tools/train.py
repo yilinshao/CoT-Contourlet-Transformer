@@ -206,7 +206,12 @@ def main():
     if cfg.model.get('freeze_swin'):
         uper_swin_checkpoint_file = cfg.model.get('pretrained_uper_swin')
         base_segmentor_ckp = load_checkpoint(model, uper_swin_checkpoint_file, map_location='cpu')
+        logger.info('=' * 20)
+        logger.info('Loaded uper_swin weights from {}'.format(uper_swin_checkpoint_file))
+        logger.info('=' * 20)
 
+    for name, param in model.named_parameters():
+        print(name, ':', param.requires_grad)
 
     # SyncBN is not support for DP
     if not distributed:

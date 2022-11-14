@@ -1,7 +1,7 @@
 _base_ = ['cot_swin_v2_sparse_window12_freeze_ade20k_bs_16.py']
 
 model = dict(
-    neck = dict(
+    neck=dict(
         ct_levels=3,
     )
 )
