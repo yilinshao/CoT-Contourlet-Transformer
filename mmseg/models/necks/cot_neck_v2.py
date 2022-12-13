@@ -27,7 +27,7 @@ class CoTNeckV2(BaseDecodeHead):
             Module applied on the last feature. Default: (1, 2, 3, 6).
     """
 
-    def __init__(self, deficient_ratio, ct_levels, sparse_resnet_config, pool_scales=(1, 2, 3, 6), **kwargs):
+    def __init__(self, deficient_ratio, ct_levels, dfb_stage, sparse_resnet_config, pool_scales=(1, 2, 3, 6), **kwargs):
         super(CoTNeckV2, self).__init__(
             input_transform='multiple_select', **kwargs)
         self.deficient_ratio = deficient_ratio
@@ -94,17 +94,20 @@ class CoTNeckV2(BaseDecodeHead):
         self.sparse_resnet = nn.ModuleList()
         self.cot_recompose_conv = nn.ModuleList()
 
+        self.dfb_stage = dfb_stage
+        assert ct_levels == len(dfb_stage)
         for i in range(self.ct_levels):
-            if i == 0:
-                assert sparse_resnet_config.get('in_channels') == 1
-            elif i == 1:
-                assert sparse_resnet_config.get('in_channels') == 1
-                sparse_resnet_config['in_channels'] = 2
-            elif i == 2:
-                assert sparse_resnet_config.get('in_channels') == 2
-                sparse_resnet_config['in_channels'] = 4
-            else:
-                raise ValueError('ct_levels extend 3')
+            sparse_resnet_config['in_channels'] = 2**dfb_stage[i]
+            # if i == 0:
+            #     assert sparse_resnet_config.get('in_channels') == 1
+            # elif i == 1:
+            #     assert sparse_resnet_config.get('in_channels') == 1
+            #     sparse_resnet_config['in_channels'] = 2
+            # elif i == 2:
+            #     assert sparse_resnet_config.get('in_channels') == 2
+            #     sparse_resnet_config['in_channels'] = 4
+            # else:
+            #     raise ValueError('ct_levels extend 3')
 
             self.sparse_resnet.insert(0, builder.build_backbone(sparse_resnet_config))
             self.cot_recompose_conv.append(
@@ -271,7 +274,9 @@ class CoTNeckV2(BaseDecodeHead):
         # laterals_dirs[(1, 2), (1, 1)]
         if self.ct_levels == 2:
             ct_dirs = [x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
-        elif self.ct_levels == 3:
+        elif self.dfb_stage == [2, 1, 0]:
+            ct_dirs = [x_dirs[:, 6: 7], x_dirs[:, 4: 6], x_dirs[:, 0: 4]]
+        elif self.dfb_stage == [0, 1, 2]:
             ct_dirs = [x_dirs[:, 3: 7], x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
         else:
             raise ValueError('ct_levels should be 2 or 3')

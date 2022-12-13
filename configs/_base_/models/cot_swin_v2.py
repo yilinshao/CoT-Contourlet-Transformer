@@ -28,6 +28,7 @@ model = dict(
     neck=dict(
         type='CoTNeckV2',
         ct_levels=2,
+        dfb_stage=[0, 1, 2],
         in_channels=[96, 192, 384, 768],
         in_index=[0, 1, 2, 3],
         pool_scales=(1, 2, 3, 6),
