@@ -23,6 +23,8 @@ model = dict(
               ),
     decode_head=dict(num_classes=150),
     test_cfg=dict(mode='slide', crop_size=(512, 512), stride=(341, 341)),
+    # test_cfg=dict(mode='whole'),
+
     auxiliary_head=[
         dict(
             type='FCNHead',

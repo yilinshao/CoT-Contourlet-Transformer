@@ -18,12 +18,13 @@ model = dict(
         num_heads=[6, 12, 24, 48],
         window_size=12),
     neck=dict(ct_levels=3,
-              dfb_stage=[2, 1, 0],
+              dfb_stage=[0, 1, 2],
               in_channels=[192, 384, 768, 1536],
               num_classes=150
               ),
     decode_head=dict(num_classes=150),
-    test_cfg=dict(mode='slide', crop_size=(512, 512), stride=(341, 341)),
+    # test_cfg=dict(mode='slide', crop_size=(512, 512), stride=(341, 341)),
+    test_cfg=dict(mode='whole'),
     auxiliary_head=[
         dict(
             type='FCNHead',
@@ -122,9 +123,9 @@ find_unused_parameters = True
 data = dict(
     samples_per_gpu=4,
     train=dict(
-        nsct_dir='nsct/training'),
+        nsct_dir='nsct_012/training'),
     val=dict(
-        nsct_dir='nsct/validation'),
+        nsct_dir='nsct_012/validation'),
     test=dict(
-        nsct_dir='nsct/validation')
+        nsct_dir='nsct_012/validation')
 )

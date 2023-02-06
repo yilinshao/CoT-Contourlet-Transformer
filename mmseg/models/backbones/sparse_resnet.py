@@ -17,13 +17,13 @@ from ..utils import ResLayer, SpResLayer
 from mmseg.utils import get_root_logger
 from mmcv.runner import load_checkpoint
 
-
 def to_sparse(x, th=0.7):
 
 
     c, h, w = x.shape[-3:]
     # x[torch.where(x < th)] = 0.0
     x_sp = spconv.SparseConvTensor.from_dense(x.reshape(-1, h, w, c))
+    # x_sp = spconv.SparseConvTensor.from_dense(x.permute(0, 2, 3, 1))
 
     return x_sp
 

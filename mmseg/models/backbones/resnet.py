@@ -420,6 +420,7 @@ class ResNet(BaseModule):
                  with_cp=False,
                  zero_init_residual=True,
                  pretrained=None,
+                 stem_downsample=True,
                  init_cfg=None):
         super(ResNet, self).__init__(init_cfg)
         if depth not in self.arch_settings:
@@ -486,6 +487,7 @@ class ResNet(BaseModule):
         self.block, stage_blocks = self.arch_settings[depth]
         self.stage_blocks = stage_blocks[:num_stages]
         self.inplanes = stem_channels
+        self.stem_downsample=stem_downsample
 
         self._make_stem_layer(in_channels, stem_channels)
 
@@ -636,6 +638,19 @@ class ResNet(BaseModule):
                     bias=False),
                 build_norm_layer(self.norm_cfg, stem_channels)[1],
                 nn.ReLU(inplace=True))
+        elif not self.stem_downsample:
+            self.conv1 = build_conv_layer(
+                self.conv_cfg,
+                in_channels,
+                stem_channels,
+                kernel_size=7,
+                stride=1,
+                padding=3,
+                bias=False)
+            self.norm1_name, norm1 = build_norm_layer(
+                self.norm_cfg, stem_channels, postfix=1)
+            self.add_module(self.norm1_name, norm1)
+            self.relu = nn.ReLU(inplace=True)
         else:
             self.conv1 = build_conv_layer(
                 self.conv_cfg,
@@ -678,7 +693,8 @@ class ResNet(BaseModule):
             x = self.conv1(x)
             x = self.norm1(x)
             x = self.relu(x)
-        x = self.maxpool(x)
+        if self.stem_downsample:
+            x = self.maxpool(x)
         outs = []
         for i, layer_name in enumerate(self.res_layers):
             res_layer = getattr(self, layer_name)

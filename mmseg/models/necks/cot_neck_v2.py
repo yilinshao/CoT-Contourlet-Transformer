@@ -1,4 +1,7 @@
+import os.path
 import sys
+
+import numpy
 import numpy as np
 import torch.nn as nn
 import torch
@@ -14,6 +17,31 @@ from .. import builder
 
 import torch.nn.functional as F
 import math
+
+def vis_hidden_layer(bs_feature, img_metas):
+    import matplotlib.pyplot as plt
+    bs = bs_feature.shape[0]
+    for n, feature in enumerate(bs_feature):
+        layer_for_vis = torch.sum(feature, dim=0, keepdim=False)
+        # layer_for_vis = feature[0]
+
+        # norm
+        layer_for_vis = layer_for_vis.detach().cpu().numpy()
+        layer_for_vis = (layer_for_vis - numpy.mean(layer_for_vis)) / numpy.std(layer_for_vis)
+        layer_for_vis = (layer_for_vis - layer_for_vis.min()) / (layer_for_vis.max() - layer_for_vis.min())
+
+
+        # layer_for_vis[layer_for_vis > (numpy.mean(layer_for_vis) + 0.2)] = numpy.mean(layer_for_vis)
+
+        plt.imshow(layer_for_vis)
+
+        os.makedirs('hidden_layer_result_images', exist_ok=True)
+        save_pth = os.path.join('hidden_layer_result_images', img_metas[n]['ori_filename'])
+
+        plt.axis('off')
+        plt.savefig(save_pth, dpi=600)
+        # plt.show()
+        plt.close()
 
 @NECKS.register_module()
 class CoTNeckV2(BaseDecodeHead):
@@ -97,7 +125,7 @@ class CoTNeckV2(BaseDecodeHead):
         self.dfb_stage = dfb_stage
         assert ct_levels == len(dfb_stage)
         for i in range(self.ct_levels):
-            sparse_resnet_config['in_channels'] = 2**dfb_stage[i]
+            sparse_resnet_config['in_channels'] = 2 ** dfb_stage[i]
             # if i == 0:
             #     assert sparse_resnet_config.get('in_channels') == 1
             # elif i == 1:
@@ -109,7 +137,7 @@ class CoTNeckV2(BaseDecodeHead):
             # else:
             #     raise ValueError('ct_levels extend 3')
 
-            self.sparse_resnet.insert(0, builder.build_backbone(sparse_resnet_config))
+            self.sparse_resnet.append(builder.build_backbone(sparse_resnet_config))
             self.cot_recompose_conv.append(
                 ConvModule(
                     self.channels,
@@ -131,6 +159,7 @@ class CoTNeckV2(BaseDecodeHead):
                 norm_cfg=self.norm_cfg,
                 act_cfg=self.act_cfg,
                 inplace=False)
+        self.is_vanilla_resnet = True if sparse_resnet_config.get('type') == 'ResNet' else False
 
     def psp_forward(self, inputs):
         """Forward function of PSP module."""
@@ -196,14 +225,16 @@ class CoTNeckV2(BaseDecodeHead):
         return deficient_map.unsqueeze(1)
 
     def _forward_dirs_feat(self, deficient_map, ct_dirs, level):
-        dir_feat = self.sparse_resnet[level](deficient_map, ct_dirs)[0]
+        if self.is_vanilla_resnet:
+            dir_feat = self.sparse_resnet[level](deficient_map * ct_dirs)[0]
+        else:
+            dir_feat = self.sparse_resnet[level](deficient_map, ct_dirs)[0]
         if hasattr(self, 'dir_feat_channel_mapping'):
             dir_feat = self.dir_feat_channel_mapping(dir_feat)
         return dir_feat
 
 
-    def _cot_upsample(self, deep_feats, ct_dirs, shallow_feats, deficient_map, level):
-
+    def _cot_upsample(self, deep_feats, ct_dirs, shallow_feats, deficient_map, level, img_metas=None):
         if deficient_map.shape[-2:] != shallow_feats.shape[-2:]:
             deficient_map = resize(deficient_map,
                                    shallow_feats.shape[-2:],
@@ -217,6 +248,9 @@ class CoTNeckV2(BaseDecodeHead):
 
         # sparse_dirs = deficient_map * ct_dirs
         dir_feats = self._forward_dirs_feat(deficient_map, ct_dirs, level)
+        #
+        # if level == 0:
+        #     vis_hidden_layer(dir_feats, img_metas)
 
         # fuse direction feature with deep feature,
         # and upsample 2x
@@ -240,12 +274,25 @@ class CoTNeckV2(BaseDecodeHead):
 
             img = mmcv.imdenormalize(imgs[n].transpose(1, 2, 0), img_metas[n]['img_norm_cfg']['mean'],
                                      img_metas[n]['img_norm_cfg']['std'], to_bgr=False)
-            plt.imshow(img.astype(np.int))
-            plt.show()
+            # plt.imshow(img.astype(np.int))
+            # plt.show()
 
             plt.imshow(img.astype(np.int))
-            plt.scatter(decifient_point_coords[1], decifient_point_coords[0], s=3.0, marker='o')
-            plt.show()
+            plt.scatter(decifient_point_coords[1], decifient_point_coords[0], s=1.0, marker='o', c='yellow', alpha=0.6)
+            os.makedirs('result_images/', exist_ok=True)
+            # print(img_metas[n]['ori_filename'])
+            save_pth = os.path.join('result_images', img_metas[n]['ori_filename'])
+            plt.savefig(save_pth, dpi=600)
+            plt.close()
+
+            plt.imshow(img.astype(np.int), alpha=0)
+            plt.scatter(decifient_point_coords[1], decifient_point_coords[0], s=1.0, marker='o', c='yellow', alpha=0.8)
+            save_ulps_kpth = save_pth.split('.jpg')[0] + '_scatter_only.jpg'
+            plt.axis('off')
+            plt.savefig(save_ulps_kpth, dpi=600)
+            plt.close()
+
+            # plt.show()
 
 
     def _forward_feature(self, inputs, x_dirs, gt, img=None, img_metas=None, show_decicient_points=False):
@@ -275,9 +322,13 @@ class CoTNeckV2(BaseDecodeHead):
         if self.ct_levels == 2:
             ct_dirs = [x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
         elif self.dfb_stage == [2, 1, 0]:
-            ct_dirs = [x_dirs[:, 6: 7], x_dirs[:, 4: 6], x_dirs[:, 0: 4]]
-        elif self.dfb_stage == [0, 1, 2]:
             ct_dirs = [x_dirs[:, 3: 7], x_dirs[:, 1: 3], x_dirs[:, 0: 1]]
+        elif self.dfb_stage == [0, 1, 2]:
+            ct_dirs = [x_dirs[:, 6: 7], x_dirs[:, 4: 6], x_dirs[:, 0: 4]]
+        elif self.dfb_stage == [0, 0, 0]:
+            ct_dirs = [x_dirs[:, 2: 3], x_dirs[:, 1: 2], x_dirs[:, 0: 1]]
+        elif self.dfb_stage == [2, 2, 2]:
+            ct_dirs = [x_dirs[:, 8: 12], x_dirs[:, 4: 8], x_dirs[:, 0: 4]]
         else:
             raise ValueError('ct_levels should be 2 or 3')
 
@@ -337,10 +388,11 @@ class CoTNeckV2(BaseDecodeHead):
             else:
                 # try:
                 cot_recompose[i - 1] = self._cot_upsample(cot_recompose[i],
-                                                              ct_dirs[i - 1],
-                                                              cot_recompose[i - 1],
-                                                              deficient_points_map,
-                                                              i - 1)
+                                                          ct_dirs[i - 1],
+                                                          cot_recompose[i - 1],
+                                                          deficient_points_map,
+                                                          i - 1,
+                                                          img_metas)
                 # except:
                 #     img = resize(img, size=deficient_points_map.shape[-2:], mode='bilinear', align_corners=self.align_corners)
                 #     self._show_deficient_points(deficient_points_map.detach().cpu().numpy(),
@@ -366,10 +418,12 @@ class CoTNeckV2(BaseDecodeHead):
     def forward(self, inputs, img, gt_semantic_seg=None, img_metas=None, show_decicient_points=False):
         """Forward function."""
         x_dirs = img[:, 4:]
-        if self.ct_levels == 2:
-            assert x_dirs.shape[1] == 3  # = 1 + 2
-        elif self.ct_levels == 3:
-            assert x_dirs.shape[1] == 7  # = 1 + 2 + 4
+
+        #  check input channels
+        dfb_channels = 0
+        for i in self.dfb_stage:
+            dfb_channels += 2**i
+        assert x_dirs.shape[1] == dfb_channels
 
         if show_decicient_points:
             assert img_metas is not None
