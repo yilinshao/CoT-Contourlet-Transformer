@@ -33,16 +33,20 @@ pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 -f https://download.py
 pip install -U openmim
 mim install mmcv-full==1.5.0
 
-# Install spconv (Choose the version matching your CUDA)
-pip install spconv-cu113
 ```
 
 ### 2\. Install Requirements
 
 ```bash
+# Clone this repo
 git clone https://github.com/yilinshao/CoT-Contourlet-Transformer.git
+
+# Install mmsegmentation
 cd CoT-Contourlet-Transformer
 pip install -v -e .
+
+# Install spconv (Choose the version matching your CUDA)
+pip install spconv-cu113
 ```
 
 -----
