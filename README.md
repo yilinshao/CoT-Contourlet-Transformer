@@ -3,7 +3,7 @@
 [](https://opensource.org/licenses/MIT)
 [](https://www.google.com/search?q=https://ieeexplore.ieee.org/xpl/RecentIssue.jsp%3Fpunumber%3D5962385)
 
-This repository contains the official implementation of the paper **"CoT: Contourlet Transformer for Hierarchical Semantic Segmentation"** (IEEE TNNLS).
+This repository contains the official implementation of the paper **"CoT: Contourlet Transformer for Hierarchical Semantic Segmentation"** ([IEEE TNNLS Link](https://ieeexplore.ieee.org/document/10445018)).
 
 Our method leverages the Contourlet Transform to achieve efficient hierarchical feature extraction for semantic segmentation tasks. 
 This codebase is built upon [mmsegmentation](https://github.com/open-mmlab/mmsegmentation), [swin-transformer](https://github.com/microsoft/Swin-Transformer), and [spconv](https://github.com/traveller59/spconv).
