@@ -1,4 +1,4 @@
-# CoT: Contourlet Transformer for Hierarchical Semantic Segmentation
+# Contourlet Transformer for Hierarchical Semantic Segmentation
 
 [](https://opensource.org/licenses/MIT)
 [](https://www.google.com/search?q=https://ieeexplore.ieee.org/xpl/RecentIssue.jsp%3Fpunumber%3D5962385)
@@ -37,7 +37,7 @@ mim install mmcv-full==1.5.0
 pip install spconv-cu113
 ```
 
-### 2\. Install CoT
+### 2\. Install Requirements
 
 ```bash
 git clone https://github.com/yilinshao/CoT-Contourlet-Transformer.git
@@ -125,15 +125,19 @@ The CoT requires pre-computed contourlet decomposition images.
 First, train the vanilla Swin Transformer backbone or download the pre-trained weights.
 
 
-**Example (ADE20K):**
+**Command syntax:**
 
 ```bash
-# Using torch.distributed.launch directly
-python -m torch.distributed.launch --nproc_per_node=2 tools/train.py \
-    configs/swin/upernet_swin_large_patch4_window12_512x512_pretrain_384x384_22K_160k_ade20k.py \
-    --launcher pytorch
+python -m torch.distributed.launch --nproc_per_node=<GPUS> tools/train.py <CONFIG_FILE> --launcher pytorch
 ```
-The configs implemented in the paper for Cityscapes and Pascal Context are 
+**Configurations for training baseline:**
+
+| Dataset | Config File Example                                                                                  |
+| :--- |:-----------------------------------------------------------------------------------------------------|
+| **ADE20K** | `configs/swin/upernet_swin_large_patch4_window12_512x512_pretrain_384x384_22K_160k_ade20k.py`        |
+| **Cityscapes** | `configs/swin/upernet_swin_large_patch4_window12_512x1024_pretrain_384x384_22K_80k_cityscapes.py`    |
+| **Pascal Context** | `configs/swin/upernet_swin_large_patch4_window12_480x480_pretrain_384x384_22K_80k_pascal_context.py` |
+
 
 ### 2\. Convert Weights
 
@@ -143,7 +147,7 @@ Then run
 python tools/convert_uper_swin_to_cot_swin.py
 ```
 
-### 3\. Train CoT
+### 3\. Train Contourlet Transformer
 
 Train the Contourlet Transformer using the converted weights.
 
@@ -201,10 +205,13 @@ This project is primarily based on [MMSegmentation v0.26](https://github.com/ope
 If you find this work helpful in your research, please consider citing our TNNLS paper:
 
 ```bibtex
-@article{CoT_TNNLS2024,
-  title={CoT: Contourlet Transformer for Hierarchical Semantic Segmentation},
-  author={Your Name and Co-authors},
-  journal={IEEE Transactions on Neural Networks and Learning Systems (TNNLS)},
+@article{shao2024cot,
+  title={CoT: Contourlet transformer for hierarchical semantic segmentation},
+  author={Shao, Yilin and Sun, Long and Jiao, Licheng and Liu, Xu and Liu, Fang and Li, Lingling and Yang, Shuyuan},
+  journal={IEEE Transactions on Neural Networks and Learning Systems},
+  volume={36},
+  number={1},
+  pages={132--146},
   year={2024},
   publisher={IEEE}
 }
