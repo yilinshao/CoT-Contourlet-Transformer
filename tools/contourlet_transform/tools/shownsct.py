@@ -111,40 +111,25 @@ def norm_features(y):
 
 def save_nsct(y, img_dir, gpu):
     # print(img_dir)
-    folder = os.path.dirname(img_dir).replace('/images', '/nsct_222')
-    rgb_folder = os.path.dirname(img_dir).replace('/slk_JPEGImages', '/nsct_rgb')
-    # folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_01')
+    # rgb_folder = os.path.dirname(img_dir).replace('/slk_JPEGImages', '/nsct_rgb')
+    folder = os.path.dirname(img_dir).replace('/images', '/nsct_012')  # ade dataset
+    # folder = os.path.dirname(img_dir).replace('/JPEGImages', '/nsct_012')
     # folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct_01')
 
     os.makedirs(folder, exist_ok=True)
-    os.makedirs(rgb_folder, exist_ok=True)
+    # os.makedirs(rgb_folder, exist_ok=True)
 
     save_dir = os.path.join(folder, os.path.basename(img_dir).replace('.png', '').replace('.jpg', ''))
-    save_rgb_dir = os.path.join(rgb_folder, os.path.basename(img_dir).replace('.png', '').replace('.jpg', ''))
+    # save_rgb_dir = os.path.join(rgb_folder, os.path.basename(img_dir).replace('.png', '').replace('.jpg', ''))
 
-    # =================================save RGB coefficients======================================= #
-    save_rgb(y, gpu, save_rgb_dir)
-    # ============================================================================================= #
+    # save RGB coefficients
+    # save_rgb(y, gpu, save_rgb_dir)
 
     y = norm_features(y)
     if gpu:
         y = torch_lst2np_lst(y)
         y = np_lst2np_stack(y)
 
-    # np.save(save_dir, y)
-
-
-
-
-
-
-def load_nsct(img_dir):
-    folder = os.path.dirname(img_dir).replace('/leftImg8bit', '/nsct')
-    save_dir = os.path.join(folder, os.path.basename(img_dir).replace('.png', '.npy'))
-    a = np.load(save_dir, allow_pickle=True)
-    a = a.tolist()
-    # shownsct(a, False)
-
-    return a
+    np.save(save_dir, y)
 
 

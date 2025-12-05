@@ -19,11 +19,11 @@ def convert_uper_swin(ckpt):
     return new_ckpt
 
 def main():
-    checkpoint = CheckpointLoader.load_checkpoint('pretrain/upernet_swin_large_patch4_window12_480x480_pretrain_384x384_22K_80k_pascal_context.pth',
+    checkpoint = CheckpointLoader.load_checkpoint('pretrain/upernet_swin_large_patch4_window12_512x512_pretrain_384x384_22K_160k_ade20k.pth',
                                                   map_location='cpu')
     state_dict = checkpoint['state_dict']
     weight = convert_uper_swin(state_dict)
-    torch.save(weight, 'pretrain/converted_upernet_swin_large_patch4_window12_480x480_pretrain_384x384_22K_80k_pascal_context.pth')
+    torch.save(weight, 'pretrain/converted_upernet_swin_large_patch4_window12_512x512_pretrain_384x384_22K_160k_ade20k.pth')
 
 
 if __name__ == '__main__':

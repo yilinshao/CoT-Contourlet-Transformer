@@ -5,7 +5,7 @@ from contourlet_dec import ContourletDec
 import os
 import numpy as np
 from PIL import Image
-from tools.shownsct import shownsct, save_nsct, load_nsct, torch_lst2np_lst, norm_features
+from tools.shownsct import shownsct, save_nsct, torch_lst2np_lst, norm_features
 from tqdm import tqdm
 import time
 
@@ -78,10 +78,10 @@ def main():
     dfilter = 'dmaxflat7'
     nsct = ContourletDec(levels, dfilter, pfilter, gpu=True)
 
-    # get dataloader
+    # change here to get dataloader for different datasets
     # dec_dataset = CityscapesImages('../../data/cityscapes/leftImg8bit/val')
-    dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/slk_JPEGImages')
-    # dec_dataset = Ade('../../data/ade/ADEChallengeData2016/images/training')
+    # dec_dataset = PascalContext('../../data/VOCdevkit/VOC2010/slk_JPEGImages')
+    dec_dataset = Ade('../../data/ade/ADEChallengeData2016/images/training')
 
     dec_loader = torch.utils.data.DataLoader(
         dec_dataset,
@@ -103,17 +103,9 @@ def main():
         # start_time = time.time()
         y = nsct.dec_iter(img)
         # end_time = time.time()
-        # print("Time:%.2fs" % (end_time - start_time))
+        # print("Decomposition Time:%.2fs" % (end_time - start_time))
 
-        # shownsct(y, nsct.gpu)
         save_nsct(y, img_path, nsct.gpu)
-        # break
-        # a = load_nsct(img_path)
-        # b = norm_features(y)
-        # b = torch_lst2np_lst(b)
-        # a = b
-
-
 
 if __name__ == '__main__':
     main()

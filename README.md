@@ -1,5 +1,16 @@
 # CoT: Contourlet Transformer for Hierarchical Semantic Segmentation
-## Train
+
+## 安装
+1. 选择镜像: torch:1.11.0-cuda11.3-cudnn8
+2. 下载mmsegmentation v0.26
+3. 根据的get_started安装openmim 和mmcv
+(安装pip install -U openmim mim install mmcv-full==1.5.0)
+4. 安装 mmsegmentation
+5. 将 CoT 代码复制进去
+
+## Pre-train uper-swin
+## Contourlet decompose
+## Train CoT
 ### 1. Train a CoT on ADE20K
 ```shell
 python distributed/launch.py
@@ -10,6 +21,7 @@ configs/cot/cot_swin_v2_ct3_sparse_stemv2_lossv2_window12_freeze_ade20k_bs_16.py
 --launcher
 pytorch
 ```
+
 
 ### 2. Train a CoT on Cityscapes 
 ```shell
