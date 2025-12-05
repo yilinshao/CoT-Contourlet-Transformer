@@ -8,7 +8,13 @@
 4. 安装 mmsegmentation
 5. 将 CoT 代码复制进去
 
+## 数据集准备
+./data文件夹, 数据集结构如下
+
+
+
 ## Pre-train uper-swin
+将训练权重放入pretrain文件夹
 ## Contourlet decompose
 ## Train CoT
 ### 1. Train a CoT on ADE20K
