@@ -49,7 +49,27 @@ pip install -v -e .
 
 ## 📂 Data Preparation
 
-### 1\. Dataset Structure
+### 1\. Dataset Download
+
+  * **Cityscapes:** The data could be found [here](https://www.cityscapes-dataset.com/downloads/) after registration. 
+By convention, `**labelTrainIds.png` are used for cityscapes training.
+MMSegmentation provides a [scripts](https://github.com/open-mmlab/mmsegmentation/blob/master/tools/convert_datasets/cityscapes.py) based on [cityscapesscripts](https://github.com/mcordts/cityscapesScripts)
+to generate `**labelTrainIds.png`.
+    ```bash
+    python tools/convert_datasets/cityscapes.py data/cityscapes --nproc 8
+    ```
+  * **ADE20K:** The training and validation set of ADE20K could be download from this [link](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip).
+You may also download test set from [here](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip).
+
+  * **Pascal Context:** The training and validation set of Pascal Context could be download from [here](http://host.robots.ox.ac.uk/pascal/VOC/voc2010/VOCtrainval_03-May-2010.tar). 
+You may also download test set from [here](http://host.robots.ox.ac.uk:8080/eval/downloads/VOC2010test.tar) after registration. 
+To split the training and validation set from original dataset, you may download trainval_merged.json from [here](https://codalabuser.blob.core.windows.net/public/trainval_merged.json). 
+If you would like to use Pascal Context dataset, please install [Detail](https://github.com/zhanghang1989/detail-api) and then run the following command to convert annotations into proper format.
+    ```shell
+    python tools/convert_datasets/pascal_context.py data/VOCdevkit data/VOCdevkit/VOC2010/trainval_merged.json
+    ```
+    
+### 2\. Dataset Structure
 
 Please organize your datasets in the `data/` directory as follows:
 
@@ -84,26 +104,6 @@ CoT-Contourlet-Transformer
 │   │   │   │   ├── training
 │   │   │   │   ├── validation
 ```
-
-### 2\. Dataset Setup
-
-  * **Cityscapes:** The data could be found [here](https://www.cityscapes-dataset.com/downloads/) after registration. 
-By convention, `**labelTrainIds.png` are used for cityscapes training.
-MMSegmentation provides a [scripts](https://github.com/open-mmlab/mmsegmentation/blob/master/tools/convert_datasets/cityscapes.py) based on [cityscapesscripts](https://github.com/mcordts/cityscapesScripts)
-to generate `**labelTrainIds.png`.
-    ```bash
-    python tools/convert_datasets/cityscapes.py data/cityscapes --nproc 8
-    ```
-  * **ADE20K:** The training and validation set of ADE20K could be download from this [link](http://data.csail.mit.edu/places/ADEchallenge/ADEChallengeData2016.zip).
-You may also download test set from [here](http://data.csail.mit.edu/places/ADEchallenge/release_test.zip).
-
-  * **Pascal Context:** The training and validation set of Pascal Context could be download from [here](http://host.robots.ox.ac.uk/pascal/VOC/voc2010/VOCtrainval_03-May-2010.tar). 
-You may also download test set from [here](http://host.robots.ox.ac.uk:8080/eval/downloads/VOC2010test.tar) after registration. 
-To split the training and validation set from original dataset, you may download trainval_merged.json from [here](https://codalabuser.blob.core.windows.net/public/trainval_merged.json). 
-If you would like to use Pascal Context dataset, please install [Detail](https://github.com/zhanghang1989/detail-api) and then run the following command to convert annotations into proper format.
-    ```shell
-    python tools/convert_datasets/pascal_context.py data/VOCdevkit data/VOCdevkit/VOC2010/trainval_merged.json
-    ```
 
 ### 3\. Contourlet Decomposition
 
